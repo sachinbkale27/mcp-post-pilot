@@ -1,0 +1,16 @@
+name: mcp-post-pilot
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: mcp-post-pilot-postgres
+    environment:
+      POSTGRES_USER: blog
+      POSTGRES_PASSWORD: blog
+      POSTGRES_DB: blog
+    ports:
+      - "5433:5432"
+    volumes:
+      - blog-pgdata:/var/lib/postgresql/data
+volumes:
+  blog-pgdata:

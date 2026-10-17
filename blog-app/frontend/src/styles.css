@@ -1,0 +1,38 @@
+:root {
+  --bg: #fafaf9; --fg: #1c1917; --muted: #78716c; --border: #e7e5e4;
+  --accent: #2563eb; --danger: #dc2626; --card: #fff;
+  font-family: system-ui, -apple-system, sans-serif; color: var(--fg); background: var(--bg);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1c1917; --fg: #f5f5f4; --muted: #a8a29e; --border: #44403c; --card: #292524; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+a { color: var(--accent); }
+.topbar { display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--card); }
+.brand { font-weight: 700; font-size: 1.1rem; text-decoration: none; color: var(--fg); }
+button, .button { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+  padding: 8px 14px; font: inherit; cursor: pointer; text-decoration: none; display: inline-block; }
+.secondary { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+.danger { background: var(--danger); }
+.actions { display: flex; gap: 8px; margin: 16px 0; }
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+.tab { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.tab.active { background: var(--fg); color: var(--bg); }
+.post-list { list-style: none; padding: 0; }
+.post-list li { padding: 14px; border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 10px; background: var(--card); }
+.post-list a { font-weight: 600; font-size: 1.05rem; }
+.badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; margin-left: 8px; }
+.badge.draft { background: #fef3c7; color: #92400e; }
+.badge.published { background: #dcfce7; color: #166534; }
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; margin-top: 4px; }
+.error { color: var(--danger); }
+.content { line-height: 1.65; }
+.editor label { display: block; margin-bottom: 14px; font-weight: 600; }
+.editor input, .editor textarea { display: block; width: 100%; margin-top: 6px; padding: 8px;
+  border: 1px solid var(--border); border-radius: 6px; font: inherit; background: var(--card); color: var(--fg); }
+.editor textarea { font-family: ui-monospace, monospace; }

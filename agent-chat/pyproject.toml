@@ -1,0 +1,13 @@
+[project]
+name = "agent-chat"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-openai",
+    "langsmith",
+    "langgraph",
+    "mcp",
+    "fastapi",
+    "uvicorn[standard]",
+    "python-dotenv",
+]
