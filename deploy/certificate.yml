@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  MCP Post Pilot - TLS certificate for the custom domains. CloudFront only uses
+  certificates from us-east-1, so this stack is deployed there (by deploy/provision.sh).
+
+Parameters:
+  BlogDomain:
+    Type: String
+  ChatDomain:
+    Type: String
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref BlogDomain
+      SubjectAlternativeNames: [!Ref ChatDomain]
+      ValidationMethod: DNS
+      # CloudFormation adds the validation CNAMEs to the zone and waits for issuance.
+      DomainValidationOptions:
+        - { DomainName: !Ref BlogDomain, HostedZoneId: !Ref HostedZoneId }
+        - { DomainName: !Ref ChatDomain, HostedZoneId: !Ref HostedZoneId }
+
+Outputs:
+  CertificateArn:
+    Value: !Ref Certificate

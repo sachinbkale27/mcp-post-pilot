@@ -23,9 +23,27 @@ Parameters:
     Type: String
     Default: github-actions-deployer
     Description: Existing IAM user whose access keys GitHub Actions uses.
+  BlogDomain:
+    Type: String
+    Default: ""
+    Description: Optional custom domain for the blog UI, e.g. blog.example.com.
+  ChatDomain:
+    Type: String
+    Default: ""
+    Description: Optional custom domain for the agent chat UI, e.g. chat.example.com.
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: Route 53 hosted zone that holds both custom domains.
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: us-east-1 ACM certificate covering both domains (deploy/certificate.yml). Empty = no custom domains.
 
 Conditions:
   HasImage: !Not [!Equals [!Ref ImageTag, ""]]
+  HasDomains: !Not [!Equals [!Ref CertificateArn, ""]]
+  HasImageAndDomains: !And [!Condition HasImage, !Condition HasDomains]
 
 Resources:
   # ------------------------------------------------------------- images
@@ -283,7 +301,8 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
 
-  # Runs on every request at the edge: IP allow-list, API path routing, SPA fallback.
+  # Runs on every request at the edge: IP allow-list, API path routing, SPA fallback
+  # (on the chat domain, page routes serve the chat app).
   ViewerRequestFunction:
     Type: AWS::CloudFront::Function
     Properties:
@@ -295,6 +314,7 @@ Resources:
       FunctionCode: !Sub
         - |
           var ALLOWED = ["${Cidrs}"];
+          var CHAT_HOST = "${ChatHost}";
 
           function toInt(ip) {
             var p = ip.split(".");
@@ -320,16 +340,19 @@ Resources:
               return { statusCode: 403, statusDescription: "Forbidden" };
             }
             var uri = request.uri;
+            var host = request.headers.host ? request.headers.host.value : "";
             if (uri.indexOf("/api/blog/") === 0) {          // -> blog API Lambda
               request.uri = uri.substring(9);
             } else if (uri.indexOf("/api/agent/") === 0) {  // -> agent Lambda
               request.uri = uri.substring(10);
             } else if (uri.indexOf(".") === -1) {           // SPA routes -> index.html
-              request.uri = (uri === "/chat" || uri.indexOf("/chat/") === 0) ? "/chat/index.html" : "/index.html";
+              var chat = (CHAT_HOST !== "" && host === CHAT_HOST) || uri === "/chat" || uri.indexOf("/chat/") === 0;
+              request.uri = chat ? "/chat/index.html" : "/index.html";
             }
             return request;
           }
         - Cidrs: !Join ['", "', !Ref AllowedCidrs]
+          ChatHost: !Ref ChatDomain
 
   Distribution:
     Condition: HasImage
@@ -342,6 +365,11 @@ Resources:
         IPV6Enabled: false              # the IP allow-list matches IPv4 addresses
         PriceClass: PriceClass_200      # includes India
         DefaultRootObject: index.html
+        Aliases: !If [HasDomains, [!Ref BlogDomain, !Ref ChatDomain], !Ref AWS::NoValue]
+        ViewerCertificate: !If
+          - HasDomains
+          - { AcmCertificateArn: !Ref CertificateArn, SslSupportMethod: sni-only, MinimumProtocolVersion: TLSv1.2_2021 }
+          - { CloudFrontDefaultCertificate: true }
         Origins:
           - Id: web
             DomainName: !GetAtt WebBucket.RegionalDomainName
@@ -381,6 +409,24 @@ Resources:
             FunctionAssociations:
               - { EventType: viewer-request, FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN }
 
+  # Custom domains -> the distribution (Z2FDTNDATAQYW2 is CloudFront's fixed alias zone id).
+  BlogDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasImageAndDomains
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref BlogDomain
+      Type: A
+      AliasTarget: { DNSName: !GetAtt Distribution.DomainName, HostedZoneId: Z2FDTNDATAQYW2 }
+  ChatDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasImageAndDomains
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref ChatDomain
+      Type: A
+      AliasTarget: { DNSName: !GetAtt Distribution.DomainName, HostedZoneId: Z2FDTNDATAQYW2 }
+
   # ------------------------------------------------- CI deploy permissions
   # Only what the GitHub Actions workflow needs on top of its ECR push access.
   DeployerPolicy:
@@ -419,10 +465,13 @@ Resources:
 Outputs:
   BlogUrl:
     Condition: HasImage
-    Value: !Sub https://${Distribution.DomainName}/
+    Value: !If [HasDomains, !Sub "https://${BlogDomain}/", !Sub "https://${Distribution.DomainName}/"]
   ChatUrl:
     Condition: HasImage
-    Value: !Sub https://${Distribution.DomainName}/chat/
+    Value: !If [HasDomains, !Sub "https://${ChatDomain}/", !Sub "https://${Distribution.DomainName}/chat/"]
+  CloudFrontUrl:
+    Condition: HasImage
+    Value: !Sub https://${Distribution.DomainName}/
   DistributionId:
     Condition: HasImage
     Value: !Ref Distribution
