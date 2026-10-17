@@ -29,16 +29,22 @@ deploy() {  # deploy <image-tag>
     --parameter-overrides "ImageTag=$1" "AllowedCidrs=$CIDRS" "OriginSecret=$SECRET"
 }
 
-push_images() {  # build HEAD for Lambda (x86_64) and push; prints the tag
-  local tag registry
-  tag=$(git -C "$ROOT" rev-parse HEAD)
+push_images() {  # build HEAD for Lambda (x86_64) and push; sets TAG
+  local registry image
+  TAG=$(git -C "$ROOT" rev-parse HEAD)
   registry=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$REGION.amazonaws.com
   aws ecr get-login-password | docker login --username AWS --password-stdin "$registry" >/dev/null
   for app in blog:blog-app agent:agent-chat; do
-    docker build -q --platform linux/amd64 --provenance=false -t "$registry/mcp-post-pilot/${app%%:*}:$tag" "$ROOT/${app#*:}" >/dev/null
-    docker push -q "$registry/mcp-post-pilot/${app%%:*}:$tag" >/dev/null
+    image="$registry/mcp-post-pilot/${app%%:*}:$TAG"
+    docker build -q --platform linux/amd64 --provenance=false -t "$image" "$ROOT/${app#*:}" >/dev/null
+    for attempt in 1 2 3; do  # pushes over slow or proxied connections can drop
+      docker push -q "$image" >/dev/null && continue 2
+      echo "Push of $image failed (attempt $attempt), retrying..." >&2
+      sleep 5
+    done
+    echo "Could not push $image" >&2
+    exit 1
   done
-  echo "$tag"
 }
 
 if TAG=$(aws lambda get-function --function-name mcp-post-pilot-agent --query Code.ImageUri --output text 2>/dev/null); then
@@ -52,7 +58,7 @@ else
   fi
   [ -z "$(git -C "$ROOT" status --porcelain)" ] || echo "Note: uncommitted changes are included in the first images."
   echo "Building and pushing the first images..."
-  TAG=$(push_images)
+  push_images
   echo "Deploying $STACK (images $TAG, allowed: $CIDRS)..."
 fi
 deploy "$TAG"
