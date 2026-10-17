@@ -52,9 +52,21 @@ jobs:
           docker push --quiet "$REGISTRY/mcp-post-pilot/blog:$TAG"
           docker push --quiet "$REGISTRY/mcp-post-pilot/agent:$TAG"
 
+      # Right after the first deploy/provision.sh run the functions do not exist yet: the
+      # images pushed above are what provision.sh needs to create them.
+      - name: Check for Lambda functions
+        id: ready
+        run: |
+          if [ -n "${{ steps.stack.outputs.AgentFunction }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Images pushed. The Lambda functions don't exist yet - run deploy/provision.sh, then rerun this workflow."
+          fi
+
       # API keys live in GitHub secrets; settings in GitHub variables (with defaults).
       # The agent Lambda reads them from Parameter Store when it starts.
       - name: Sync app settings to Parameter Store
+        if: steps.ready.outputs.ready == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
@@ -78,6 +90,7 @@ jobs:
           put LANGSMITH_ENDPOINT String
 
       - name: Update Lambda functions
+        if: steps.ready.outputs.ready == 'true'
         env:
           REGISTRY: ${{ steps.stack.outputs.RegistryUri }}
           TAG: ${{ github.sha }}
@@ -96,15 +109,18 @@ jobs:
           done
 
       - uses: actions/setup-node@v4
+        if: steps.ready.outputs.ready == 'true'
         with:
           node-version: 22
 
       - name: Build UIs
+        if: steps.ready.outputs.ready == 'true'
         run: |
           (cd blog-app/frontend && npm ci && VITE_API_URL=/api/blog npm run build)
           (cd agent-chat/frontend && npm ci && VITE_API_URL=/api/agent npm run build -- --base /chat/)
 
       - name: Upload UIs and refresh CloudFront
+        if: steps.ready.outputs.ready == 'true'
         env:
           BUCKET: ${{ steps.stack.outputs.WebBucket }}
           DISTRIBUTION: ${{ steps.stack.outputs.DistributionId }}
@@ -120,6 +136,7 @@ jobs:
             --query Invalidation.Id --output text
 
       - name: Summary
+        if: steps.ready.outputs.ready == 'true'
         run: |
           {
             echo "### Deployed \`${GITHUB_SHA::7}\`"

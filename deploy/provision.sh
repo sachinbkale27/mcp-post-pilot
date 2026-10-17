@@ -36,13 +36,18 @@ push_images() {  # build HEAD for Lambda (x86_64) and push; sets TAG
   aws ecr get-login-password | docker login --username AWS --password-stdin "$registry" >/dev/null
   for app in blog:blog-app agent:agent-chat; do
     image="$registry/mcp-post-pilot/${app%%:*}:$TAG"
+    # Already pushed (e.g. by the GitHub Actions workflow)? Then there is nothing to do.
+    if aws ecr describe-images --repository-name "mcp-post-pilot/${app%%:*}" --image-ids "imageTag=$TAG" >/dev/null 2>&1; then
+      echo "Using existing image $image"; continue
+    fi
     docker build -q --platform linux/amd64 --provenance=false -t "$image" "$ROOT/${app#*:}" >/dev/null
     for attempt in 1 2 3; do  # pushes over slow or proxied connections can drop
       docker push -q "$image" >/dev/null && continue 2
       echo "Push of $image failed (attempt $attempt), retrying..." >&2
       sleep 5
     done
-    echo "Could not push $image" >&2
+    echo "Could not push $image. Alternative: push this commit to main; the GitHub Actions" >&2
+    echo "workflow builds and pushes the images, then rerun deploy/provision.sh." >&2
     exit 1
   done
 }
@@ -57,7 +62,7 @@ else
     deploy ""
   fi
   [ -z "$(git -C "$ROOT" status --porcelain)" ] || echo "Note: uncommitted changes are included in the first images."
-  echo "Building and pushing the first images..."
+  echo "Preparing the first images..."
   push_images
   echo "Deploying $STACK (images $TAG, allowed: $CIDRS)..."
 fi
