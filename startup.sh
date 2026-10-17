@@ -52,7 +52,7 @@ for app in blog-app agent-chat; do
     info "Creating Python venv for $app"
     (cd "$ROOT/$app" && uv venv -q --python 3.13)
   fi
-  (cd "$ROOT/$app" && uv pip install -q -r pyproject.toml)
+  (cd "$ROOT/$app" && uv pip install -q -r requirements.txt)
 done
 for ui in blog-app/frontend agent-chat/frontend; do
   if [ ! -d "$ROOT/$ui/node_modules" ]; then

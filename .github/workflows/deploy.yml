@@ -1,0 +1,133 @@
+name: Deploy to AWS
+
+# Builds the three images, pushes them to ECR, and rolls them out on the EC2
+# instance via SSM Run Command. Infrastructure is created separately with
+# deploy/provision.sh; this workflow only reads the stack's outputs.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  STACK_NAME: mcp-post-pilot
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read stack outputs
+        id: stack
+        run: |
+          output() {
+            aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
+          }
+          echo "instance_id=$(output InstanceId)" >> "$GITHUB_OUTPUT"
+          echo "registry=$(output RegistryUri)" >> "$GITHUB_OUTPUT"
+          echo "blog_url=$(output BlogUrl)" >> "$GITHUB_OUTPUT"
+          echo "chat_url=$(output ChatUrl)" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push images
+        env:
+          REGISTRY: ${{ steps.stack.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -t "$REGISTRY/mcp-post-pilot/blog:$TAG" blog-app
+          docker build -t "$REGISTRY/mcp-post-pilot/agent:$TAG" agent-chat
+          docker build -t "$REGISTRY/mcp-post-pilot/web:$TAG" -f deploy/web/Dockerfile .
+          for image in blog agent web; do docker push --quiet "$REGISTRY/mcp-post-pilot/$image:$TAG"; done
+
+      # API keys live in GitHub secrets; settings in GitHub variables (with defaults).
+      # The instance reads them from Parameter Store, so they never appear in commands or logs.
+      - name: Sync app settings to Parameter Store
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-2024-11-20' }}
+          LANGSMITH_TRACING: ${{ vars.LANGSMITH_TRACING || 'true' }}
+          LANGSMITH_PROJECT: ${{ vars.LANGSMITH_PROJECT || 'mcp-blog-agent' }}
+          LANGSMITH_ENDPOINT: ${{ vars.LANGSMITH_ENDPOINT || 'https://api.smith.langchain.com' }}
+        run: |
+          put() {  # name, type
+            if [ -n "${!1}" ]; then
+              aws ssm put-parameter --name "/mcp-post-pilot/$1" --type "$2" --value "${!1}" --overwrite >/dev/null
+              echo "set /mcp-post-pilot/$1"
+            fi
+          }
+          [ -n "$OPENAI_API_KEY" ] || echo "::warning::OPENAI_API_KEY secret is not set; keeping the value already in Parameter Store (if any)"
+          put OPENAI_API_KEY SecureString
+          put LANGSMITH_API_KEY SecureString
+          put OPENAI_MODEL String
+          put LANGSMITH_TRACING String
+          put LANGSMITH_PROJECT String
+          put LANGSMITH_ENDPOINT String
+
+      - name: Deploy on the instance
+        env:
+          INSTANCE_ID: ${{ steps.stack.outputs.instance_id }}
+          REGISTRY: ${{ steps.stack.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          # A brand-new instance takes a minute or two to register with SSM.
+          for i in $(seq 1 40); do
+            status=$(aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+              --query 'InstanceInformationList[0].PingStatus' --output text)
+            [ "$status" = "Online" ] && break
+            echo "Waiting for the instance to come online in SSM ($status)..."; sleep 15
+          done
+
+          compose=$(base64 -w0 deploy/docker-compose.prod.yml)
+          script=$(base64 -w0 deploy/remote-deploy.sh)
+          jq -n --arg compose "$compose" --arg script "$script" \
+                --arg args "$REGISTRY $TAG $AWS_REGION" '{
+            commands: [
+              "mkdir -p /opt/mcp-post-pilot && cd /opt/mcp-post-pilot",
+              "echo \($compose) | base64 -d > docker-compose.yml",
+              "echo \($script) | base64 -d > remote-deploy.sh",
+              "bash remote-deploy.sh \($args)"
+            ],
+            executionTimeout: ["1200"]
+          }' > ssm-params.json
+
+          command_id=$(aws ssm send-command --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript --comment "deploy ${TAG:0:7}" \
+            --parameters file://ssm-params.json --query Command.CommandId --output text)
+          echo "SSM command: $command_id"
+
+          while true; do
+            sleep 10
+            status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) echo "  $status..."; continue ;; esac
+            break
+          done
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+            --query '[StandardOutputContent, StandardErrorContent]' --output text
+          [ "$status" = "Success" ] || { echo "::error::Deploy finished with status $status"; exit 1; }
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deployed \`${GITHUB_SHA::7}\`"
+            echo "- Blog: ${{ steps.stack.outputs.blog_url }}"
+            echo "- Agent chat: ${{ steps.stack.outputs.chat_url }}"
+          } >> "$GITHUB_STEP_SUMMARY"

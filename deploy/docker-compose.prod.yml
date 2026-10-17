@@ -1,0 +1,65 @@
+# Production stack on the EC2 instance. Values like ${REGISTRY} come from the
+# .env file next to this file, written by remote-deploy.sh on every deploy.
+name: mcp-post-pilot
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: blog
+      POSTGRES_DB: blog
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "blog"]
+      interval: 5s
+      retries: 20
+
+  blog-api:
+    image: ${REGISTRY}/mcp-post-pilot/blog:${IMAGE_TAG}
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      DATABASE_URL: postgresql+psycopg://blog:${POSTGRES_PASSWORD}@postgres:5432/blog
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  blog-mcp:
+    image: ${REGISTRY}/mcp-post-pilot/blog:${IMAGE_TAG}
+    restart: unless-stopped
+    logging: *logging
+    working_dir: /app
+    command: ["python", "mcp_server/server.py"]
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_ALLOWED_HOSTS: "blog-mcp:*"
+      BLOG_API_URL: http://blog-api:8100
+    depends_on: [blog-api]
+
+  agent-api:
+    image: ${REGISTRY}/mcp-post-pilot/agent:${IMAGE_TAG}
+    restart: unless-stopped
+    logging: *logging
+    env_file: app.env  # OPENAI_*, LANGSMITH_* from Parameter Store
+    environment:
+      MCP_SERVER_URL: http://blog-mcp:8101/mcp
+    depends_on: [blog-mcp]
+
+  web:
+    image: ${REGISTRY}/mcp-post-pilot/web:${IMAGE_TAG}
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "80:80"      # blog UI
+      - "8080:8080"  # agent chat UI
+    depends_on: [blog-api, agent-api]
+
+volumes:
+  pgdata:

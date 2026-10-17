@@ -19,6 +19,7 @@ from typing import Literal
 import httpx
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp_types import ToolAnnotations
 
 BLOG_API_URL = os.getenv("BLOG_API_URL", "http://127.0.0.1:8100")
@@ -153,5 +154,22 @@ def review_post(post_id: int) -> str:
     )
 
 
+def _transport_security() -> TransportSecuritySettings | None:
+    """DNS-rebinding protection: only accept requests whose Host header is listed.
+
+    On 127.0.0.1 the SDK enables this for localhost automatically. In Docker the
+    server binds 0.0.0.0, so set MCP_ALLOWED_HOSTS (e.g. "blog-mcp:*") to keep it on.
+    """
+    hosts = [h.strip() for h in os.getenv("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+    if not hosts:
+        return None
+    return TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=hosts, allowed_origins=[])
+
+
 if __name__ == "__main__":
-    mcp.run("streamable-http", host="127.0.0.1", port=int(os.getenv("MCP_PORT", "8101")))
+    mcp.run(
+        "streamable-http",
+        host=os.getenv("MCP_HOST", "127.0.0.1"),
+        port=int(os.getenv("MCP_PORT", "8101")),
+        transport_security=_transport_security(),
+    )
