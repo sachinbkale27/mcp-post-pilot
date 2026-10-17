@@ -1,8 +1,8 @@
 name: Deploy to AWS
 
-# Builds the three images, pushes them to ECR, and rolls them out on the EC2
-# instance via SSM Run Command. Infrastructure is created separately with
-# deploy/provision.sh; this workflow only reads the stack's outputs.
+# Serverless deploy: build the two images, push to ECR, point the three Lambda
+# functions at them, then upload both UIs to S3 and refresh CloudFront.
+# Infrastructure is created separately with deploy/provision.sh.
 on:
   push:
     branches: [main]
@@ -35,29 +35,25 @@ jobs:
       - name: Read stack outputs
         id: stack
         run: |
-          output() {
-            aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
-              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
-          }
-          echo "instance_id=$(output InstanceId)" >> "$GITHUB_OUTPUT"
-          echo "registry=$(output RegistryUri)" >> "$GITHUB_OUTPUT"
-          echo "blog_url=$(output BlogUrl)" >> "$GITHUB_OUTPUT"
-          echo "chat_url=$(output ChatUrl)" >> "$GITHUB_OUTPUT"
+          aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+            --query 'Stacks[0].Outputs[].[OutputKey,OutputValue]' --output text |
+            while read -r key value; do echo "$key=$value" >> "$GITHUB_OUTPUT"; done
 
       - uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push images
         env:
-          REGISTRY: ${{ steps.stack.outputs.registry }}
+          REGISTRY: ${{ steps.stack.outputs.RegistryUri }}
           TAG: ${{ github.sha }}
         run: |
-          docker build -t "$REGISTRY/mcp-post-pilot/blog:$TAG" blog-app
-          docker build -t "$REGISTRY/mcp-post-pilot/agent:$TAG" agent-chat
-          docker build -t "$REGISTRY/mcp-post-pilot/web:$TAG" -f deploy/web/Dockerfile .
-          for image in blog agent web; do docker push --quiet "$REGISTRY/mcp-post-pilot/$image:$TAG"; done
+          # --provenance=false: Lambda only accepts single-platform image manifests.
+          docker build --provenance=false -t "$REGISTRY/mcp-post-pilot/blog:$TAG" blog-app
+          docker build --provenance=false -t "$REGISTRY/mcp-post-pilot/agent:$TAG" agent-chat
+          docker push --quiet "$REGISTRY/mcp-post-pilot/blog:$TAG"
+          docker push --quiet "$REGISTRY/mcp-post-pilot/agent:$TAG"
 
       # API keys live in GitHub secrets; settings in GitHub variables (with defaults).
-      # The instance reads them from Parameter Store, so they never appear in commands or logs.
+      # The agent Lambda reads them from Parameter Store when it starts.
       - name: Sync app settings to Parameter Store
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -81,53 +77,52 @@ jobs:
           put LANGSMITH_PROJECT String
           put LANGSMITH_ENDPOINT String
 
-      - name: Deploy on the instance
+      - name: Update Lambda functions
         env:
-          INSTANCE_ID: ${{ steps.stack.outputs.instance_id }}
-          REGISTRY: ${{ steps.stack.outputs.registry }}
+          REGISTRY: ${{ steps.stack.outputs.RegistryUri }}
           TAG: ${{ github.sha }}
         run: |
-          # A brand-new instance takes a minute or two to register with SSM.
-          for i in $(seq 1 40); do
-            status=$(aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
-              --query 'InstanceInformationList[0].PingStatus' --output text)
-            [ "$status" = "Online" ] && break
-            echo "Waiting for the instance to come online in SSM ($status)..."; sleep 15
+          # The MCP server runs from the blog image with a different command.
+          update() {  # function, image
+            aws lambda update-function-code --function-name "$1" \
+              --image-uri "$REGISTRY/mcp-post-pilot/$2:$TAG" --query LastUpdateStatus --output text
+          }
+          update "${{ steps.stack.outputs.BlogFunction }}" blog
+          update "${{ steps.stack.outputs.McpFunction }}" blog
+          update "${{ steps.stack.outputs.AgentFunction }}" agent
+          for fn in ${{ steps.stack.outputs.BlogFunction }} ${{ steps.stack.outputs.McpFunction }} ${{ steps.stack.outputs.AgentFunction }}; do
+            aws lambda wait function-updated --function-name "$fn"
+            echo "$fn: $(aws lambda get-function-configuration --function-name "$fn" --query LastUpdateStatus --output text)"
           done
 
-          compose=$(base64 -w0 deploy/docker-compose.prod.yml)
-          script=$(base64 -w0 deploy/remote-deploy.sh)
-          jq -n --arg compose "$compose" --arg script "$script" \
-                --arg args "$REGISTRY $TAG $AWS_REGION" '{
-            commands: [
-              "mkdir -p /opt/mcp-post-pilot && cd /opt/mcp-post-pilot",
-              "echo \($compose) | base64 -d > docker-compose.yml",
-              "echo \($script) | base64 -d > remote-deploy.sh",
-              "bash remote-deploy.sh \($args)"
-            ],
-            executionTimeout: ["1200"]
-          }' > ssm-params.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-          command_id=$(aws ssm send-command --instance-ids "$INSTANCE_ID" \
-            --document-name AWS-RunShellScript --comment "deploy ${TAG:0:7}" \
-            --parameters file://ssm-params.json --query Command.CommandId --output text)
-          echo "SSM command: $command_id"
+      - name: Build UIs
+        run: |
+          (cd blog-app/frontend && npm ci && VITE_API_URL=/api/blog npm run build)
+          (cd agent-chat/frontend && npm ci && VITE_API_URL=/api/agent npm run build -- --base /chat/)
 
-          while true; do
-            sleep 10
-            status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
-              --query Status --output text 2>/dev/null || echo Pending)
-            case "$status" in Pending|InProgress|Delayed) echo "  $status..."; continue ;; esac
-            break
-          done
-          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
-            --query '[StandardOutputContent, StandardErrorContent]' --output text
-          [ "$status" = "Success" ] || { echo "::error::Deploy finished with status $status"; exit 1; }
+      - name: Upload UIs and refresh CloudFront
+        env:
+          BUCKET: ${{ steps.stack.outputs.WebBucket }}
+          DISTRIBUTION: ${{ steps.stack.outputs.DistributionId }}
+        run: |
+          # Hashed assets can be cached forever; index.html must always be revalidated.
+          aws s3 sync blog-app/frontend/dist "s3://$BUCKET/" --delete --exclude "chat/*" \
+            --exclude index.html --cache-control "public,max-age=31536000,immutable"
+          aws s3 sync agent-chat/frontend/dist "s3://$BUCKET/chat/" --delete \
+            --exclude index.html --cache-control "public,max-age=31536000,immutable"
+          aws s3 cp blog-app/frontend/dist/index.html "s3://$BUCKET/index.html" --cache-control no-cache
+          aws s3 cp agent-chat/frontend/dist/index.html "s3://$BUCKET/chat/index.html" --cache-control no-cache
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/index.html" "/chat/index.html" \
+            --query Invalidation.Id --output text
 
       - name: Summary
         run: |
           {
             echo "### Deployed \`${GITHUB_SHA::7}\`"
-            echo "- Blog: ${{ steps.stack.outputs.blog_url }}"
-            echo "- Agent chat: ${{ steps.stack.outputs.chat_url }}"
+            echo "- Blog: ${{ steps.stack.outputs.BlogUrl }}"
+            echo "- Agent chat: ${{ steps.stack.outputs.ChatUrl }}"
           } >> "$GITHUB_STEP_SUMMARY"

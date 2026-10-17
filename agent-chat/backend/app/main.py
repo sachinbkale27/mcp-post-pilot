@@ -1,5 +1,6 @@
 """Chat API for the MCP agent. Streams agent events to the UI as Server-Sent Events (SSE)."""
 
+import os
 import uuid
 from collections.abc import AsyncIterable
 
@@ -10,6 +11,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel
 
 from .agent import list_mcp_capabilities, reset_thread, run_turn
+from .origin import OriginSecretMiddleware
 
 app = FastAPI(title="MCP Agent Chat")
 app.add_middleware(
@@ -18,6 +20,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# On AWS only CloudFront knows this secret; direct calls to the Lambda URL are rejected.
+if secret := os.getenv("ORIGIN_SECRET"):
+    app.add_middleware(OriginSecretMiddleware, secret=secret)
 
 
 class ChatRequest(BaseModel):
@@ -43,7 +48,7 @@ async def chat(req: ChatRequest) -> AsyncIterable[ServerSentEvent]:
     POST (not GET) because the message goes in the body, so the browser reads the
     stream with fetch() rather than EventSource, which only supports GET.
     """
-    # The conversation id doubles as the LangGraph thread_id (memory + LangSmith thread).
+    # The conversation id keys the stored history and groups turns into one LangSmith thread.
     conversation_id = req.conversation_id or str(uuid.uuid4())
     yield _sse({"type": "conversation", "id": conversation_id})
     try:

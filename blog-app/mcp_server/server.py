@@ -23,6 +23,8 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp_types import ToolAnnotations
 
 BLOG_API_URL = os.getenv("BLOG_API_URL", "http://127.0.0.1:8100")
+# On AWS the blog API only accepts requests carrying the shared origin secret.
+ORIGIN_SECRET = os.getenv("ORIGIN_SECRET")
 
 mcp = MCPServer(
     name="blog",
@@ -38,7 +40,8 @@ class BlogAPIError(ToolError):
 
 
 async def _api(method: str, path: str, **kwargs) -> dict | list | None:
-    async with httpx.AsyncClient(base_url=BLOG_API_URL, timeout=10) as client:
+    headers = {"x-origin-secret": ORIGIN_SECRET} if ORIGIN_SECRET else {}
+    async with httpx.AsyncClient(base_url=BLOG_API_URL, headers=headers, timeout=10) as client:
         resp = await client.request(method, path, **kwargs)
     if resp.status_code >= 400:
         # Raising inside a tool makes the server return a result with
@@ -167,9 +170,21 @@ def _transport_security() -> TransportSecuritySettings | None:
 
 
 if __name__ == "__main__":
-    mcp.run(
-        "streamable-http",
-        host=os.getenv("MCP_HOST", "127.0.0.1"),
-        port=int(os.getenv("MCP_PORT", "8101")),
+    import uvicorn
+
+    from origin import OriginSecretMiddleware
+
+    host = os.getenv("MCP_HOST", "127.0.0.1")
+    app = mcp.streamable_http_app(
+        host=host,
         transport_security=_transport_security(),
+        # On Lambda each request may hit a different instance, so keep no session state
+        # and answer with plain JSON instead of an SSE stream.
+        stateless_http=os.getenv("MCP_STATELESS") == "1",
+        json_response=os.getenv("MCP_STATELESS") == "1",
+    )
+    uvicorn.run(
+        OriginSecretMiddleware(app, ORIGIN_SECRET) if ORIGIN_SECRET else app,
+        host=host,
+        port=int(os.getenv("MCP_PORT", "8101")),
     )

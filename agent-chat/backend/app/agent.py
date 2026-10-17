@@ -13,28 +13,36 @@ definitions; swapping MCP_SERVER_URL gives it a completely different skill set.
 
 With LANGSMITH_TRACING=true every run is traced to LangSmith: one trace per
 user turn, with child runs for each graph node, LLM call and MCP tool call.
+
+Conversation history is loaded before each turn and saved after it (memory.py),
+so the same code works for one local process and for stateless Lambda instances.
 """
 
 import asyncio
 import json
 import os
-from pathlib import Path
+from contextlib import asynccontextmanager
 from typing import Any
 
-from dotenv import load_dotenv
+from .settings import load_settings
 
-# Load OPENAI_API_KEY, LANGSMITH_* etc. from agent-chat/.env before anything reads them.
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+# OPENAI_API_KEY, LANGSMITH_* etc.: from agent-chat/.env locally, Parameter Store on AWS.
+load_settings()
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.tracers.langchain import wait_for_all_tracers
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langsmith import traceable
 from mcp.client.client import Client
+from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 from mcp_types import Tool as MCPTool
 
+from .memory import get_conversation_store
+
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8101/mcp")
+# On AWS the MCP server only accepts requests carrying the shared origin secret.
+ORIGIN_SECRET = os.getenv("ORIGIN_SECRET")
 MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 
 SYSTEM_PROMPT = """You are a helpful assistant connected to a blog through MCP tools.
@@ -43,9 +51,18 @@ or delete them when asked. Look up post ids with list_posts or search_posts rath
 guessing. Before deleting a post, make sure the user clearly asked for that specific post.
 Keep answers concise and use Markdown."""
 
-# Conversation memory: LangGraph saves the state after every step, keyed by thread_id.
-# In-memory, so it is lost on restart; swap for a Postgres/SQLite checkpointer to persist.
-checkpointer = InMemorySaver()
+
+
+@asynccontextmanager
+async def connect_mcp():
+    """Open an MCP client session (connect, initialize) to the blog MCP server."""
+    if not ORIGIN_SECRET:
+        async with Client(MCP_SERVER_URL) as client:
+            yield client
+        return
+    async with create_mcp_http_client(headers={"x-origin-secret": ORIGIN_SECRET}) as http:
+        async with Client(streamable_http_client(MCP_SERVER_URL, http_client=http)) as client:
+            yield client
 
 
 def mcp_tool_to_openai(tool: MCPTool) -> dict[str, Any]:
@@ -104,12 +121,12 @@ def build_graph(mcp: Client, tools: list[dict[str, Any]]):
     graph.add_edge(START, "agent")
     graph.add_conditional_edges("agent", route, ["tools", END])
     graph.add_edge("tools", "agent")
-    return graph.compile(checkpointer=checkpointer)
+    return graph.compile()
 
 
 async def list_mcp_capabilities() -> dict[str, Any]:
     """What the MCP server advertises (shown in the chat UI's sidebar)."""
-    async with Client(MCP_SERVER_URL) as mcp:
+    async with connect_mcp() as mcp:
         tools = await mcp.list_tools()
         resources = await mcp.list_resources()
         templates = await mcp.list_resource_templates()
@@ -131,22 +148,25 @@ async def run_turn(thread_id: str, user_text: str):
       "messages" -> (chunk, metadata) for every LLM token: streamed to the UI as `token` events
       "updates"  -> each node's state change once it finishes: tool calls and tool results
     """
+    conversations = get_conversation_store()
+    history = conversations.load(thread_id)
+    new_messages: list[BaseMessage] = [HumanMessage(user_text)]
+
     # One MCP session per turn: connect, initialize, discover tools.
-    async with Client(MCP_SERVER_URL) as mcp:
+    async with connect_mcp() as mcp:
         listed = await mcp.list_tools()
         tools = [mcp_tool_to_openai(t) for t in listed.tools]
         yield {"type": "mcp_connected", "server_url": MCP_SERVER_URL, "tools": [t["function"]["name"] for t in tools]}
 
         graph = build_graph(mcp, tools)
         config = {
-            "configurable": {"thread_id": thread_id},
             # recursion_limit caps agent<->tools round trips.
             "recursion_limit": 25,
             # LangSmith: name the trace and group a conversation's turns into one thread.
             "run_name": "blog-agent",
             "metadata": {"thread_id": thread_id},
         }
-        stream = graph.astream({"messages": [HumanMessage(user_text)]}, config, stream_mode=["messages", "updates"])
+        stream = graph.astream({"messages": [*history, *new_messages]}, config, stream_mode=["messages", "updates"])
         async for mode, chunk in stream:
             if mode == "messages":
                 message, metadata = chunk
@@ -155,12 +175,18 @@ async def run_turn(thread_id: str, user_text: str):
             else:
                 for delta in chunk.values():
                     for message in delta["messages"]:
+                        new_messages.append(message)
                         for event in _events_for(message):
                             yield event
 
+    # Save only after a completed turn, so a failed one never leaves half a tool exchange.
+    conversations.save(thread_id, [*history, *new_messages])
+    # Lambda freezes the process once the response ends; send pending LangSmith traces first.
+    wait_for_all_tracers()
+
 
 def reset_thread(thread_id: str) -> None:
-    checkpointer.delete_thread(thread_id)
+    get_conversation_store().delete(thread_id)
 
 
 def _events_for(message: BaseMessage):

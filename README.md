@@ -66,45 +66,56 @@ cd blog-app && .venv/bin/python scripts/try_mcp_client.py
 npx @modelcontextprotocol/inspector     # GUI: connect to http://127.0.0.1:8101/mcp (Streamable HTTP)
 ```
 
-## Deploy to AWS
+## Deploy to AWS (serverless)
 
-One EC2 instance in `ap-south-1` runs the whole stack with Docker Compose. GitHub Actions
-builds the images and deploys on every push to `main`.
+Nothing runs while nobody is using it: CloudFront and S3 serve the UIs, Lambda runs the
+three Python services on demand, and DynamoDB stores posts and chat history. Idle cost is
+close to $0; you pay per request (plus a few cents for stored images and data).
 
 ```
-GitHub Actions ──build──► ECR ◄──pull── EC2 (Docker Compose)
-      │                                   ├─ web (nginx): blog UI :80, chat UI :8080, proxies /api/
-      └──SSM Run Command (no SSH)────────►├─ blog-api, blog-mcp, agent-api   (private network)
-                                          └─ postgres                          (private network)
+browser ──HTTPS──► CloudFront ── edge function: IP allow-list, /api routing, SPA fallback
+                     ├─ /            S3   blog UI
+                     ├─ /chat/       S3   agent chat UI
+                     ├─ /api/blog/*  ──► Lambda: blog API ──────────────► DynamoDB (posts)
+                     └─ /api/agent/* ──► Lambda: agent (SSE streaming) ─► DynamoDB (chats)
+                                             │ MCP over HTTPS
+                                             ▼
+                                         Lambda: MCP server ──► blog API Lambda
 ```
+
+- The same container images run locally and on Lambda: the [AWS Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter)
+  forwards each invocation to the unchanged uvicorn server, with response streaming for the chat.
+- `STORAGE_BACKEND=dynamodb` and `CONVERSATION_BACKEND=dynamodb` switch storage; locally the
+  defaults (Postgres, in-memory chat history) are used.
+- Lambda function URLs are public, so CloudFront adds a secret `x-origin-secret` header and every
+  service rejects requests without it. The MCP server runs stateless (`MCP_STATELESS=1`) because
+  consecutive requests can reach different Lambda instances.
 
 | File | Purpose |
 |---|---|
-| `deploy/cloudformation.yml` | EC2 instance, Elastic IP, security group, ECR repos, CI deploy policy |
-| `deploy/provision.sh` | Creates/updates that stack (run by you, with your own AWS credentials) |
-| `.github/workflows/deploy.yml` | Build → push to ECR → sync settings to Parameter Store → deploy via SSM |
-| `deploy/docker-compose.prod.yml`, `deploy/remote-deploy.sh` | What runs on the instance |
-| `blog-app/Dockerfile`, `agent-chat/Dockerfile`, `deploy/web/` | Images |
+| `deploy/cloudformation.yml` | Lambdas, function URLs, DynamoDB tables, S3, CloudFront + edge function, ECR, CI policy |
+| `deploy/provision.sh` | Creates/updates the stack (run by you, with your own AWS credentials) |
+| `.github/workflows/deploy.yml` | Build → push to ECR → update Lambdas → upload UIs → refresh CloudFront |
 
 **One-time setup**
 
-1. Provision the infrastructure (needs an AWS CLI profile with admin-level rights):
+1. Provision (needs an AWS CLI profile with admin-level rights, plus Docker for the first images):
    ```bash
-   deploy/provision.sh              # UIs reachable only from your current IP
-   deploy/provision.sh 0.0.0.0/0    # ...or from anywhere
+   deploy/provision.sh                          # site usable only from your current IP
+   deploy/provision.sh 203.0.113.0/24,0.0.0.0/0 # or other IPv4 ranges / everyone
    ```
-2. Add repository secrets (`gh secret set NAME` prompts for the value):
-   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (the `github-actions-deployer` IAM user),
-   `OPENAI_API_KEY`, and optionally `LANGSMITH_API_KEY`.
+2. Repository secrets (`gh secret set NAME` prompts for the value): `AWS_ACCESS_KEY_ID`,
+   `AWS_SECRET_ACCESS_KEY` (the `github-actions-deployer` IAM user), `OPENAI_API_KEY`, optionally `LANGSMITH_API_KEY`.
 3. Optional repository variables: `OPENAI_MODEL`, `LANGSMITH_PROJECT`, `LANGSMITH_TRACING`, `LANGSMITH_ENDPOINT`.
-4. Push to `main` (or run the workflow manually). The job summary shows the URLs.
+4. Push to `main` (or `gh workflow run deploy.yml`). The job summary shows the URLs.
 
 **Notes**
 
-- The blog API and chat have no authentication, so the security group limits who can reach them
-  (`AllowedCidr`). Opening them to `0.0.0.0/0` lets anyone edit posts and spend your OpenAI credits.
-- Postgres data lives on the instance's EBS volume. Back it up before replacing the instance or deleting the stack.
-- Run a command on the instance without SSH: `aws ssm start-session --target <InstanceId> --region ap-south-1`.
+- The blog API and chat have no login, so the edge function only admits the allowed IPv4 ranges.
+  Allowing `0.0.0.0/0` lets anyone edit posts and spend your OpenAI credits. Rerun `provision.sh` when your IP changes.
+- The first request after a while is a cold start (a few seconds).
+- The posts table has point-in-time recovery and is kept even if the stack is deleted.
+- Logs: CloudWatch log groups `/aws/lambda/mcp-post-pilot-{blog,mcp,agent}`.
 
 ## How it works
 
@@ -120,7 +131,7 @@ GitHub Actions ──build──► ECR ◄──pull── EC2 (Docker Compose)
 5. **The loop (LangGraph).** `agent` node → the model decides to call e.g. `publish_post(post_id=3)` →
    `tools` node sends `tools/call` to the MCP server → the server calls `POST /posts/3/publish` →
    the result goes back to the model as a `ToolMessage` → repeat until the reply has no `tool_calls`.
-   An `InMemorySaver` checkpointer keeps each conversation's messages, keyed by `thread_id`.
+   Each conversation's messages are loaded before a turn and saved after it (`memory.py`): in memory locally, DynamoDB on AWS.
 6. **Errors.** A tool that raises `ToolError` returns `isError: true` with the message (e.g. `404: Post 9 not found`);
    the agent passes it to the model, which can recover by looking up the right id.
 7. **Streaming (SSE).** `graph.astream(..., stream_mode=["messages", "updates"])` yields LLM tokens
@@ -149,8 +160,6 @@ for example to ask for confirmation before `delete_post`.
 - Add human-in-the-loop approval for tools with `destructiveHint` (pause the LangGraph run before the `tools` node).
 - Run the MCP server over **stdio** and connect it to Claude Desktop / Claude Code (`claude mcp add`).
 - Add authentication to the blog API, agent chat and MCP server (`MCPServer(auth=..., token_verifier=...)`), then HTTPS with a domain.
-- Automated Postgres backups to S3.
-- Persist conversations with a Postgres checkpointer (`langgraph-checkpoint-postgres`) instead of `InMemorySaver`.
 
 Versions this was built against: `mcp` 2.3 (where `FastMCP` was renamed `MCPServer`), `langgraph` 1.2,
 `langchain-openai` 1.7, React 19, Vite 8. Set the model with `OPENAI_MODEL` in `agent-chat/.env`.

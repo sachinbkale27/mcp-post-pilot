@@ -9,5 +9,6 @@ dependencies = [
     "mcp",
     "fastapi",
     "uvicorn[standard]",
+    "boto3",
     "python-dotenv",
 ]
