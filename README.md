@@ -94,12 +94,17 @@ browser ──HTTPS──► CloudFront ── edge function: IP allow-list, /ap
 | File | Purpose |
 |---|---|
 | `deploy/cloudformation.yml` | Lambdas, function URLs, DynamoDB tables, S3, CloudFront + edge function, ECR, CI policy |
-| `deploy/provision.sh` | Creates/updates the stack (run by you, with your own AWS credentials) |
+| `deploy/provision.sh` | Creates/updates the stacks (run by you, with your own AWS credentials) |
+| `deploy/config.env` | Region and optional custom domains + Route 53 hosted zone |
+| `deploy/certificate.yml` | TLS certificate for the custom domains (us-east-1, DNS-validated) |
 | `.github/workflows/deploy.yml` | Build → push to ECR → update Lambdas → upload UIs → refresh CloudFront |
+
+**Live:** blog at https://blog-app.sachin-kale.com, agent chat at https://agent-chat.sachin-kale.com
+(both CloudFront aliases; on the chat domain the edge function serves the chat app at `/`).
 
 **One-time setup**
 
-1. Provision (needs an AWS CLI profile with admin-level rights, plus Docker for the first images):
+1. Set the region and (optionally) custom domains in `deploy/config.env`, then provision (needs an AWS CLI profile with admin-level rights, plus Docker for the first images):
    ```bash
    deploy/provision.sh                          # site usable only from your current IP
    deploy/provision.sh 203.0.113.0/24,0.0.0.0/0 # or other IPv4 ranges / everyone

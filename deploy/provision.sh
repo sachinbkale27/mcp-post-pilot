@@ -68,6 +68,7 @@ push_images() {  # build HEAD for Lambda (x86_64) and push; sets TAG
   done
 }
 
+FIRST_RUN=false
 if TAG=$(aws lambda get-function --function-name mcp-post-pilot-agent --query Code.ImageUri --output text 2>/dev/null); then
   TAG=${TAG##*:}
   echo "Updating $STACK in $REGION (images $TAG, allowed: $CIDRS)..."
@@ -80,10 +81,13 @@ else
   [ -z "$(git -C "$ROOT" status --porcelain)" ] || echo "Note: uncommitted changes are included in the first images."
   echo "Preparing the first images..."
   push_images
+  FIRST_RUN=true
   echo "Deploying $STACK (images $TAG, allowed: $CIDRS)..."
 fi
 deploy "$TAG"
 
 aws cloudformation describe-stacks --stack-name "$STACK" \
   --query 'Stacks[0].Outputs[].[OutputKey,OutputValue]' --output table
-echo "The UIs appear after the first GitHub Actions deploy uploads them (push to main, or: gh workflow run deploy.yml)."
+if $FIRST_RUN; then
+  echo "The UIs appear after the first GitHub Actions deploy uploads them (push to main, or: gh workflow run deploy.yml)."
+fi
