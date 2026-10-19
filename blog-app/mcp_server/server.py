@@ -182,12 +182,8 @@ async def generate_image(
     if not key:
         raise BlogAPIError("Image generation isn't configured: the MCP server has no OPENAI_API_KEY")
 
-    body: dict = {"model": IMAGE_MODEL, "prompt": prompt, "n": 1}
-    if IMAGE_MODEL.startswith("dall-e"):
-        # DALL-E uses different sizes and returns a URL unless asked for base64.
-        body |= {"size": {"1536x1024": "1792x1024", "1024x1536": "1024x1792"}.get(size, size), "response_format": "b64_json"}
-    else:
-        body |= {"size": size, "quality": IMAGE_QUALITY}
+    # GPT Image models always return base64 image data.
+    body = {"model": IMAGE_MODEL, "prompt": prompt, "n": 1, "size": size, "quality": IMAGE_QUALITY}
 
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(f"{IMAGE_API_URL}/images/generations", headers={"Authorization": f"Bearer {key}"}, json=body)
@@ -197,7 +193,8 @@ async def generate_image(
         except ValueError:
             error = {}
         message = error.get("message", resp.text)
-        if resp.status_code in (403, 404) or error.get("code") == "model_not_found" or "does not have access" in message:
+        # 403 model_not_found: the project may not use the model; 400 param=model: no such model.
+        if resp.status_code in (403, 404) or error.get("code") == "model_not_found" or error.get("param") == "model":
             raise BlogAPIError(
                 f"The image model '{IMAGE_MODEL}' isn't available to this OpenAI project. "
                 "Enable it in the OpenAI dashboard (Settings > Limits / model access) to generate images."
