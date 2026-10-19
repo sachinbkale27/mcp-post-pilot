@@ -59,7 +59,8 @@ class SqlPostStore:
 
         from .models import Post as PostRow
 
-        stmt = select(PostRow).order_by(PostRow.updated_at.desc())
+        # Newest first by publication date (drafts by last edit), so editing an old post doesn't move it up.
+        stmt = select(PostRow).order_by(func.coalesce(PostRow.published_at, PostRow.updated_at).desc())
         if status:
             stmt = stmt.where(PostRow.status == status)
         if q:
@@ -156,7 +157,8 @@ class DynamoPostStore:
             posts = [p for p in posts if needle in p["title"].lower() or needle in p["content"].lower()]
         if category:
             posts = [p for p in posts if (p.get("category") or "").lower() == category.lower()]
-        return sorted(posts, key=lambda p: p["updated_at"], reverse=True)
+        # Newest first by publication date (drafts by last edit), so editing an old post doesn't move it up.
+        return sorted(posts, key=lambda p: p.get("published_at") or p["updated_at"], reverse=True)
 
     def create(self, fields):
         counter = self._table.update_item(
