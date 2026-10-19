@@ -41,6 +41,11 @@ jobs:
 
       - uses: aws-actions/amazon-ecr-login@v2
 
+      # Anonymous pulls of the Lambda Web Adapter base image from public.ecr.aws are
+      # rate limited (429 "Data limit exceeded"); authenticated pulls get a far higher limit.
+      - name: Log in to ECR Public
+        run: aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+
       - name: Build and push images
         env:
           REGISTRY: ${{ steps.stack.outputs.RegistryUri }}
