@@ -49,6 +49,17 @@ export function avatarHue(author: string): number {
 }
 
 /**
+ * Remove inline copies of the cover image: the article already shows the cover at the top.
+ * Matches ![alt](url) and ![alt](url "title") with the same URL, ignoring surrounding spaces.
+ */
+export function withoutCoverImage(markdown: string, cover: string | null | undefined): string {
+  if (!cover) return markdown;
+  const escaped = cover.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const image = new RegExp(`!\\[[^\\]]*\\]\\(\\s*${escaped}\\s*(?:"[^"]*")?\\s*\\)`, "g");
+  return markdown.replace(image, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/**
  * Drop a first line that only repeats the title (agent-written posts often start with
  * "**Title**" or "# Title"), so cards and articles don't show the title twice.
  */

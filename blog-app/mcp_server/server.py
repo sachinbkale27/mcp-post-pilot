@@ -116,9 +116,9 @@ async def create_post(
     """Create a new post as a draft. Content is Markdown.
 
     Args:
-        cover_image_url: Image shown on the post card and at the top of the article.
-            Use an image URL the user provided, e.g. /media/abc.webp. Inline images go in the
-            content as ![alt text](url).
+        cover_image_url: Image shown on the post card and automatically at the top of the
+            article, e.g. /media/abc.webp. Don't repeat the cover image inside the content.
+            Other images go in the content as ![alt text](url).
     """
     body = {"title": title, "content": content, "author": author, "cover_image_url": cover_image_url}
     return await _api("POST", "/posts", json=body)

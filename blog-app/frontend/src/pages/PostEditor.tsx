@@ -5,7 +5,7 @@ import remarkGfm from "remark-gfm";
 import { ArrowLeft, Eye, PenLine, Send } from "lucide-react";
 import { api, type Post, type PostInput } from "../api";
 import { ConfirmDialog, useToast } from "../components/Feedback";
-import { readingTime, withoutLeadingTitle, wordCount } from "../lib/format";
+import { readingTime, withoutCoverImage, withoutLeadingTitle, wordCount } from "../lib/format";
 import { usePageTitle } from "../lib/usePageTitle";
 
 const EMPTY: PostInput = { title: "", content: "", author: "" };
@@ -150,7 +150,7 @@ export function PostEditor() {
           <div className="preview">
             <h1 className="article-title">{form.title || "Untitled"}</h1>
             <div className="prose">
-              {form.content.trim() ? <Markdown remarkPlugins={[remarkGfm]}>{withoutLeadingTitle(form.content, form.title)}</Markdown> : <p className="muted">Nothing to preview yet.</p>}
+              {form.content.trim() ? <Markdown remarkPlugins={[remarkGfm]}>{withoutCoverImage(withoutLeadingTitle(form.content, form.title), post?.cover_image_url)}</Markdown> : <p className="muted">Nothing to preview yet.</p>}
             </div>
           </div>
         )}

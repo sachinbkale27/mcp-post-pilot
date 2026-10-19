@@ -7,7 +7,7 @@ import { api, type Post } from "../api";
 import { CHAT_URL } from "../components/Layout";
 import { ConfirmDialog, EmptyState, useToast } from "../components/Feedback";
 import { Byline, StatusBadge } from "../components/PostBits";
-import { withoutLeadingTitle } from "../lib/format";
+import { withoutCoverImage, withoutLeadingTitle } from "../lib/format";
 import { usePageTitle } from "../lib/usePageTitle";
 
 export function PostView() {
@@ -109,7 +109,7 @@ export function PostView() {
 
       <div className="prose">
         {post.content.trim() ? (
-          <Markdown remarkPlugins={[remarkGfm]}>{withoutLeadingTitle(post.content, post.title)}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]}>{withoutCoverImage(withoutLeadingTitle(post.content, post.title), post.cover_image_url)}</Markdown>
         ) : (
           <p className="muted">This post has no content yet.</p>
         )}
