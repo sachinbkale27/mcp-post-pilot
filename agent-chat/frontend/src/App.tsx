@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { FilePlus2, ListChecks, Menu, ScanSearch, Sparkles, SquarePen } from "lucide-react";
-import { BLOG_URL, getMcpInfo, resetChat, streamChat, type AgentEvent, type McpInfo } from "./api";
-import { Composer } from "./components/Composer";
+import { FilePlus2, ImagePlus, ListChecks, Menu, ScanSearch, Sparkles, SquarePen } from "lucide-react";
+import { BLOG_URL, getMcpInfo, resetChat, streamChat, uploadImage, type AgentEvent, type McpInfo } from "./api";
+import { Composer, MAX_ATTACHMENTS, type Attachment } from "./components/Composer";
+import { prepareImage } from "./lib/images";
 import { AgentTurn, UserMessage, type Step, type Turn } from "./components/Messages";
 import { Brand, Sidebar } from "./components/Sidebar";
 
@@ -11,6 +12,8 @@ const SUGGESTIONS = [
   { icon: ScanSearch, title: "Review a post", prompt: "Review the post “What is MCP?” for clarity and structure, and suggest concrete edits." },
   { icon: SquarePen, title: "Publishing queue", prompt: "Which posts are still drafts? Summarize what each needs before publishing." },
 ];
+
+const IMAGE_ONLY_PROMPT = "Here are some images.";
 
 /** Apply one streamed agent event to the steps of the current turn. */
 function applyEvent(steps: Step[], event: AgentEvent): Step[] {
@@ -42,6 +45,7 @@ export function App() {
   const [infoError, setInfoError] = useState<string>();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [conversationId, setConversationId] = useState<string>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -54,7 +58,8 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    document.title = turns[0] ? `${turns[0].user.slice(0, 40)} · Post Pilot Agent` : "Post Pilot Agent";
+    const first = turns[0] && (turns[0].user || "Images");
+    document.title = first ? `${first.slice(0, 40)} · Post Pilot Agent` : "Post Pilot Agent";
   }, [turns]);
 
   // Follow new output only while the reader is at the bottom.
@@ -64,16 +69,40 @@ export function App() {
   }, [turns]);
 
   const updateLast = (fn: (t: Turn) => Turn) => setTurns((ts) => [...ts.slice(0, -1), fn(ts[ts.length - 1])]);
+  const patchAttachment = (id: string, patch: Partial<Attachment>) =>
+    setAttachments((list) => list.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+
+  /** Resize each file in the browser, then upload it to the blog's media store. */
+  function addFiles(files: File[]) {
+    const room = MAX_ATTACHMENTS - attachments.length;
+    for (const file of files.slice(0, Math.max(0, room))) {
+      const id = crypto.randomUUID();
+      setAttachments((list) => [...list, { id, name: file.name, status: "processing" }]);
+      prepareImage(file)
+        .then(async ({ blob, dataUrl }) => {
+          patchAttachment(id, { preview: dataUrl, status: "uploading" });
+          patchAttachment(id, { url: await uploadImage(blob), status: "ready" });
+        })
+        .catch((e) => patchAttachment(id, { status: "error", error: (e as Error).message }));
+    }
+  }
 
   async function send(text: string) {
-    if (!text.trim() || busy) return;
+    const ready = attachments.filter((a) => a.status === "ready" && a.url && a.preview);
+    if ((!text.trim() && ready.length === 0) || busy) return;
+    const message = text.trim() || IMAGE_ONLY_PROMPT;
+    const images = ready.map((a) => ({ url: a.url!, data_url: a.preview!, name: a.name }));
     setInput("");
+    setAttachments([]);
     stickToBottom.current = true;
-    setTurns((ts) => [...ts, { user: text.trim(), steps: [], pending: true }]);
+    setTurns((ts) => [
+      ...ts,
+      { user: text.trim(), images: images.map((i) => ({ url: i.url, preview: i.data_url, name: i.name })), steps: [], pending: true },
+    ]);
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      for await (const event of streamChat(text.trim(), conversationId, controller.signal)) {
+      for await (const event of streamChat(message, conversationId, images, controller.signal)) {
         if (event.type === "conversation") setConversationId(event.id);
         else updateLast((t) => ({ ...t, steps: applyEvent(t.steps, event) }));
       }
@@ -90,6 +119,7 @@ export function App() {
     if (conversationId) await resetChat(conversationId).catch(() => {});
     setConversationId(undefined);
     setTurns([]);
+    setAttachments([]);
     setSidebarOpen(false);
   }
 
@@ -111,7 +141,7 @@ export function App() {
             <Menu size={19} />
           </button>
           <div className="only-mobile"><Brand /></div>
-          <h1 className="topbar-title hide-mobile">{turns[0]?.user ?? "New conversation"}</h1>
+          <h1 className="topbar-title hide-mobile">{turns[0] ? turns[0].user || "Images" : "New conversation"}</h1>
           {info && <span className="model-chip"><Sparkles size={13} aria-hidden /> {info.model}</span>}
         </header>
 
@@ -135,6 +165,10 @@ export function App() {
                 through {info ? info.tools.length : "its"} MCP tools: I can find and read posts,
                 draft new ones, edit, publish or delete them. You'll see every tool call as it happens.
               </p>
+              <p className="welcome-tip">
+                <ImagePlus size={15} aria-hidden /> Tip: attach photos and ask me to write a post around them. I can
+                see them and use them as the cover or inline.
+              </p>
               <div className="suggestions">
                 {SUGGESTIONS.map(({ icon: Icon, title, prompt }) => (
                   <button key={title} className="suggestion" onClick={() => send(prompt)} disabled={busy}>
@@ -149,7 +183,7 @@ export function App() {
             <div className="thread">
               {turns.map((turn, i) => (
                 <div key={i} className="turn">
-                  <UserMessage text={turn.user} />
+                  <UserMessage text={turn.user} images={turn.images} />
                   <AgentTurn turn={turn} />
                 </div>
               ))}
@@ -160,6 +194,9 @@ export function App() {
         <Composer
           value={input}
           busy={busy}
+          attachments={attachments}
+          onAddFiles={addFiles}
+          onRemoveAttachment={(id) => setAttachments((list) => list.filter((a) => a.id !== id))}
           onChange={setInput}
           onSend={() => send(input)}
           onStop={() => abortRef.current?.abort()}

@@ -30,7 +30,9 @@ mcp = MCPServer(
     name="blog",
     instructions=(
         "Tools for managing a blog. Posts start as drafts; publish_post makes "
-        "them public. Use list_posts or search_posts to find post ids."
+        "them public. Use list_posts or search_posts to find post ids. Content is "
+        "Markdown; images are referenced by URL (![alt text](/media/...)). Use image "
+        "URLs exactly as supplied (a path starting with /media/, no scheme or host)."
     ),
 )
 
@@ -84,9 +86,21 @@ async def get_post(post_id: int) -> dict:
 
 
 @mcp.tool()
-async def create_post(title: str, content: str, author: str = "anonymous") -> dict:
-    """Create a new post as a draft. Content is Markdown."""
-    return await _api("POST", "/posts", json={"title": title, "content": content, "author": author})
+async def create_post(
+    title: str,
+    content: str,
+    author: str = "anonymous",
+    cover_image_url: str | None = None,
+) -> dict:
+    """Create a new post as a draft. Content is Markdown.
+
+    Args:
+        cover_image_url: Image shown on the post card and at the top of the article.
+            Use an image URL the user provided, e.g. /media/abc.webp. Inline images go in the
+            content as ![alt text](url).
+    """
+    body = {"title": title, "content": content, "author": author, "cover_image_url": cover_image_url}
+    return await _api("POST", "/posts", json=body)
 
 
 @mcp.tool(annotations=ToolAnnotations(idempotentHint=True))
@@ -95,9 +109,17 @@ async def update_post(
     title: str | None = None,
     content: str | None = None,
     author: str | None = None,
+    cover_image_url: str | None = None,
 ) -> dict:
-    """Update fields of an existing post. Only the fields you pass are changed."""
-    body = {k: v for k, v in {"title": title, "content": content, "author": author}.items() if v is not None}
+    """Update fields of an existing post. Only the fields you pass are changed.
+
+    Args:
+        cover_image_url: New cover image URL (one the user provided). Pass "" to remove the cover.
+    """
+    fields = {"title": title, "content": content, "author": author, "cover_image_url": cover_image_url}
+    body = {k: v for k, v in fields.items() if v is not None}
+    if body.get("cover_image_url") == "":
+        body["cover_image_url"] = None
     return await _api("PATCH", f"/posts/{post_id}", json=body)
 
 
@@ -133,7 +155,8 @@ async def all_posts_resource() -> str:
 async def post_resource(post_id: str) -> str:
     """A single post rendered as Markdown."""
     p = await _api("GET", f"/posts/{post_id}")
-    return f"# {p['title']}\n\n_by {p['author']} · {p['status']}_\n\n{p['content']}"
+    cover = f"![cover]({p['cover_image_url']})\n\n" if p.get("cover_image_url") else ""
+    return f"# {p['title']}\n\n_by {p['author']} · {p['status']}_\n\n{cover}{p['content']}"
 
 
 # -------------------------------------------------------------- prompts

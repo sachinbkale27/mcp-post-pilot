@@ -11,6 +11,7 @@ export interface Post {
   created_at: string;
   updated_at: string;
   published_at: string | null;
+  cover_image_url?: string | null;
 }
 
 export type PostInput = Pick<Post, "title" | "content" | "author">;

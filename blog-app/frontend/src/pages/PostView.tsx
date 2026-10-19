@@ -101,6 +101,12 @@ export function PostView() {
         </div>
       </header>
 
+      {post.cover_image_url && (
+        <figure className="article-cover">
+          <img src={post.cover_image_url} alt="" />
+        </figure>
+      )}
+
       <div className="prose">
         {post.content.trim() ? (
           <Markdown remarkPlugins={[remarkGfm]}>{withoutLeadingTitle(post.content, post.title)}</Markdown>

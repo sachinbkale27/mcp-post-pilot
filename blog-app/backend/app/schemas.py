@@ -8,12 +8,14 @@ class PostCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     content: str = ""
     author: str = "anonymous"
+    cover_image_url: str | None = Field(default=None, max_length=500)
 
 
 class PostUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     content: str | None = None
     author: str | None = None
+    cover_image_url: str | None = Field(default=None, max_length=500)
 
 
 class PostOut(BaseModel):
@@ -27,3 +29,4 @@ class PostOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     published_at: datetime | None
+    cover_image_url: str | None = None

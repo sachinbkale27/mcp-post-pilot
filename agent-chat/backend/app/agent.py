@@ -49,6 +49,10 @@ SYSTEM_PROMPT = """You are a helpful assistant connected to a blog through MCP t
 Use the tools to answer questions about posts and to create, edit, publish, unpublish
 or delete them when asked. Look up post ids with list_posts or search_posts rather than
 guessing. Before deleting a post, make sure the user clearly asked for that specific post.
+When the user attaches images you can see them, and you are told their URLs. To use one in a
+post, pass it as cover_image_url and/or embed it in the content as ![alt text](url), with alt
+text that describes what the image shows. Use each URL exactly as given, a path starting with
+/media/; never add a scheme or host. Only use image URLs the user actually provided.
 Keep answers concise and use Markdown."""
 
 
@@ -141,7 +145,22 @@ async def list_mcp_capabilities() -> dict[str, Any]:
     }
 
 
-async def run_turn(thread_id: str, user_text: str):
+def _user_message(text: str, images: list[dict[str, str]]) -> tuple[HumanMessage, HumanMessage]:
+    """Build (message for the model, message for the saved history).
+
+    The model gets the images inline so it can see them; the history keeps only their URLs,
+    so stored conversations stay small.
+    """
+    if not images:
+        return HumanMessage(text), HumanMessage(text)
+    listing = "\n".join(f"- {img['url']}" + (f" ({img['name']})" if img.get("name") else "") for img in images)
+    note = f"{text}\n\n[Attached {len(images)} image(s), uploaded at:\n{listing}]"
+    parts: list[dict[str, Any]] = [{"type": "text", "text": note}]
+    parts += [{"type": "image_url", "image_url": {"url": img["data_url"]}} for img in images]
+    return HumanMessage(parts), HumanMessage(note)
+
+
+async def run_turn(thread_id: str, user_text: str, images: list[dict[str, str]] | None = None):
     """Run one user turn, yielding UI events as the graph progresses.
 
     Two LangGraph stream modes are combined:
@@ -150,7 +169,8 @@ async def run_turn(thread_id: str, user_text: str):
     """
     conversations = get_conversation_store()
     history = conversations.load(thread_id)
-    new_messages: list[BaseMessage] = [HumanMessage(user_text)]
+    model_message, history_message = _user_message(user_text, images or [])
+    new_messages: list[BaseMessage] = [model_message]
 
     # One MCP session per turn: connect, initialize, discover tools.
     async with connect_mcp() as mcp:
@@ -180,7 +200,7 @@ async def run_turn(thread_id: str, user_text: str):
                             yield event
 
     # Save only after a completed turn, so a failed one never leaves half a tool exchange.
-    conversations.save(thread_id, [*history, *new_messages])
+    conversations.save(thread_id, [*history, history_message, *new_messages[1:]])
     # Lambda freezes the process once the response ends; send pending LangSmith traces first.
     wait_for_all_tracers()
 

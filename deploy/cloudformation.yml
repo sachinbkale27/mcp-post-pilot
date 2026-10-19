@@ -120,6 +120,13 @@ Resources:
               - Effect: Allow
                 Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:Scan]
                 Resource: !GetAtt PostsTable.Arn
+        - PolicyName: upload-media
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub ${WebBucket.Arn}/media/*   # uploaded images, served by CloudFront
 
   McpRole:
     Type: AWS::IAM::Role
@@ -164,6 +171,7 @@ Resources:
         Variables:
           STORAGE_BACKEND: dynamodb
           POSTS_TABLE: !Ref PostsTable
+          MEDIA_BUCKET: !Ref WebBucket
           ORIGIN_SECRET: !Ref OriginSecret
           AWS_LWA_PORT: "8100"
           AWS_LWA_READINESS_CHECK_PROTOCOL: tcp

@@ -30,9 +30,14 @@ def _now() -> datetime:
 
 class SqlPostStore:
     def __init__(self):
+        from sqlalchemy import text
+
         from .db import Base, SessionLocal, engine
 
         Base.metadata.create_all(engine)
+        # create_all doesn't alter existing tables: add columns introduced later.
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE posts ADD COLUMN IF NOT EXISTS cover_image_url VARCHAR(500)"))
         self._sessions = SessionLocal
 
     @staticmethod

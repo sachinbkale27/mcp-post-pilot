@@ -1,5 +1,22 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8102";
 export const BLOG_URL = import.meta.env.VITE_BLOG_URL ?? "http://localhost:5173";
+// The blog API stores uploaded images (same CloudFront distribution in production).
+const BLOG_API_URL = import.meta.env.VITE_BLOG_API_URL ?? "http://localhost:8100";
+
+/** An image attached to a chat message: its public URL plus a small copy the model can see. */
+export interface ChatImage {
+  url: string;
+  data_url: string;
+  name?: string;
+}
+
+/** Upload an (already resized) image; returns its public /media/... URL. */
+export async function uploadImage(blob: Blob): Promise<string> {
+  const res = await fetch(`${BLOG_API_URL}/images`, { method: "POST", headers: { "Content-Type": blob.type }, body: blob });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `Upload failed (${res.status})`);
+  return body.url;
+}
 
 /** Events streamed by the agent backend over SSE. `type` is the SSE event name. */
 export type AgentEvent =
@@ -34,11 +51,16 @@ export async function getMcpInfo(): Promise<McpInfo> {
  * has `event: <name>` and one or more `data: <json>` lines. Lines starting with ':' are
  * keep-alive comments. Aborting `signal` stops the stream (the Stop button).
  */
-export async function* streamChat(message: string, conversationId: string | undefined, signal: AbortSignal): AsyncGenerator<AgentEvent> {
+export async function* streamChat(
+  message: string,
+  conversationId: string | undefined,
+  images: ChatImage[],
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
   const res = await fetch(`${API_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ message, conversation_id: conversationId }),
+    body: JSON.stringify({ message, conversation_id: conversationId, images }),
     signal,
   });
   if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`);

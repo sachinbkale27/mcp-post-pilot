@@ -24,14 +24,24 @@ export type Step =
 
 export interface Turn {
   user: string;
+  images: { url: string; preview: string; name: string }[];
   steps: Step[];
   pending: boolean;
 }
 
-export function UserMessage({ text }: { text: string }) {
+export function UserMessage({ text, images }: { text: string; images: Turn["images"] }) {
   return (
     <div className="msg-user">
-      <div className="bubble">{text}</div>
+      {images.length > 0 && (
+        <div className="user-images">
+          {images.map((img) => (
+            <a key={img.url} href={img.url} target="_blank" rel="noreferrer" title={img.name}>
+              <img src={img.preview} alt={img.name} />
+            </a>
+          ))}
+        </div>
+      )}
+      {text && <div className="bubble">{text}</div>}
     </div>
   );
 }

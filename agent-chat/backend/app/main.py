@@ -8,7 +8,7 @@ import openai
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.sse import EventSourceResponse, ServerSentEvent
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from .agent import list_mcp_capabilities, reset_thread, run_turn
 from .origin import OriginSecretMiddleware
@@ -25,9 +25,26 @@ if secret := os.getenv("ORIGIN_SECRET"):
     app.add_middleware(OriginSecretMiddleware, secret=secret)
 
 
+MAX_IMAGE_DATA_URL = 2_800_000  # ~2 MB image; the UI resizes before sending
+
+
+class ChatImage(BaseModel):
+    url: str = Field(pattern=r"^/media/[\w.-]+$")  # where the blog serves the uploaded image
+    data_url: str = Field(max_length=MAX_IMAGE_DATA_URL)  # small copy for the model to look at
+    name: str | None = Field(default=None, max_length=200)
+
+    @field_validator("data_url")
+    @classmethod
+    def _is_image(cls, value: str) -> str:
+        if not value.startswith(("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,", "data:image/gif;base64,")):
+            raise ValueError("data_url must be a base64 JPEG, PNG, WebP or GIF data URL")
+        return value
+
+
 class ChatRequest(BaseModel):
     message: str
     conversation_id: str | None = None
+    images: list[ChatImage] = Field(default_factory=list, max_length=4)
 
 
 @app.get("/mcp/info")
@@ -52,7 +69,8 @@ async def chat(req: ChatRequest) -> AsyncIterable[ServerSentEvent]:
     conversation_id = req.conversation_id or str(uuid.uuid4())
     yield _sse({"type": "conversation", "id": conversation_id})
     try:
-        async for event in run_turn(conversation_id, req.message):
+        images = [img.model_dump() for img in req.images]
+        async for event in run_turn(conversation_id, req.message, images):
             yield _sse(event)
     except Exception as exc:
         yield _sse({"type": "error", "message": _error_message(exc)})

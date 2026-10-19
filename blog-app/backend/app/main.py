@@ -1,12 +1,15 @@
 """Blog REST API. The React UI and the MCP server are both clients of this API."""
 
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+from .media import IMAGE_TYPES, MAX_IMAGE_BYTES, canonical_media_urls, get_media_store, local_media_dir, looks_like_image
 from .origin import OriginSecretMiddleware
 from .schemas import PostCreate, PostOut, PostUpdate
 from .store import Post, PostStore, get_store
@@ -14,13 +17,25 @@ from .store import Post, PostStore, get_store
 app = FastAPI(title="Blog API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174"],  # blog and chat dev servers
     allow_methods=["*"],
     allow_headers=["*"],
 )
 # On AWS only CloudFront (and the MCP server) know this secret; direct calls are rejected.
 if secret := os.getenv("ORIGIN_SECRET"):
     app.add_middleware(OriginSecretMiddleware, secret=secret)
+# Locally the API serves uploaded images itself; on AWS CloudFront serves them from S3.
+if not os.getenv("MEDIA_BUCKET"):
+    local_media_dir().mkdir(parents=True, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=local_media_dir()), name="media")
+
+
+def _clean(fields: dict) -> dict:
+    """Store links to uploaded images in one canonical form (/media/<name>)."""
+    for key in ("content", "cover_image_url"):
+        if fields.get(key):
+            fields[key] = canonical_media_urls(fields[key])
+    return fields
 
 
 def _found(post: Post | None, post_id: int) -> Post:
@@ -40,7 +55,7 @@ def list_posts(
 
 @app.post("/posts", response_model=PostOut, status_code=201)
 def create_post(body: PostCreate, store: PostStore = Depends(get_store)):
-    return store.create(body.model_dump())
+    return store.create(_clean(body.model_dump()))
 
 
 @app.get("/posts/{post_id}", response_model=PostOut)
@@ -50,7 +65,7 @@ def get_post(post_id: int, store: PostStore = Depends(get_store)):
 
 @app.patch("/posts/{post_id}", response_model=PostOut)
 def update_post(post_id: int, body: PostUpdate, store: PostStore = Depends(get_store)):
-    return _found(store.update(post_id, body.model_dump(exclude_unset=True)), post_id)
+    return _found(store.update(post_id, _clean(body.model_dump(exclude_unset=True))), post_id)
 
 
 @app.post("/posts/{post_id}/publish", response_model=PostOut)
@@ -69,3 +84,23 @@ def delete_post(post_id: int, store: PostStore = Depends(get_store)):
     if not store.delete(post_id):
         raise HTTPException(status_code=404, detail=f"Post {post_id} not found")
     return Response(status_code=204)
+
+
+@app.post("/images", status_code=201)
+async def upload_image(request: Request):
+    """Store an image sent as the raw request body; returns its public URL.
+
+    The chat UI resizes images in the browser first, so uploads stay small.
+    """
+    content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if content_type not in IMAGE_TYPES:
+        raise HTTPException(status_code=415, detail="Upload a JPEG, PNG, WebP or GIF image")
+    data = await request.body()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty upload")
+    if len(data) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail=f"Images must be under {MAX_IMAGE_BYTES // (1024 * 1024)} MB")
+    if not looks_like_image(content_type, data):
+        raise HTTPException(status_code=400, detail="The file is not a valid image")
+    name = f"{uuid.uuid4().hex}.{IMAGE_TYPES[content_type]}"
+    return {"url": get_media_store().save(name, data, content_type)}

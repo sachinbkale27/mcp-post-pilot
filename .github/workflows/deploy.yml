@@ -122,7 +122,7 @@ jobs:
         if: steps.ready.outputs.ready == 'true'
         run: |
           (cd blog-app/frontend && npm ci && VITE_API_URL=/api/blog VITE_CHAT_URL="${{ steps.stack.outputs.ChatUrl }}" npm run build)
-          (cd agent-chat/frontend && npm ci && VITE_API_URL=/api/agent VITE_BLOG_URL="${{ steps.stack.outputs.BlogUrl }}" npm run build -- --base /chat/)
+          (cd agent-chat/frontend && npm ci && VITE_API_URL=/api/agent VITE_BLOG_API_URL=/api/blog VITE_BLOG_URL="${{ steps.stack.outputs.BlogUrl }}" npm run build -- --base /chat/)
 
       - name: Upload UIs and refresh CloudFront
         if: steps.ready.outputs.ready == 'true'
@@ -131,7 +131,8 @@ jobs:
           DISTRIBUTION: ${{ steps.stack.outputs.DistributionId }}
         run: |
           # Hashed assets can be cached forever; index.html must always be revalidated.
-          aws s3 sync blog-app/frontend/dist "s3://$BUCKET/" --delete --exclude "chat/*" \
+          # media/ holds uploaded images: never delete it during a deploy.
+          aws s3 sync blog-app/frontend/dist "s3://$BUCKET/" --delete --exclude "chat/*" --exclude "media/*" \
             --exclude index.html --cache-control "public,max-age=31536000,immutable"
           aws s3 sync agent-chat/frontend/dist "s3://$BUCKET/chat/" --delete \
             --exclude index.html --cache-control "public,max-age=31536000,immutable"

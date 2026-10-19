@@ -20,3 +20,5 @@ class Post(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Shown on post cards and at the top of the article; usually a /media/... URL.
+    cover_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

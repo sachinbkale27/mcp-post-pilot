@@ -36,16 +36,23 @@ export function Byline({ post, size = 32 }: { post: Post; size?: number }) {
 
 export function PostCard({ post, featured = false }: { post: Post; featured?: boolean }) {
   return (
-    <article className={featured ? "card card-featured" : "card"}>
-      <Link to={`/posts/${post.id}`} className="card-link">
-        <div className="card-top">
-          {post.status === "draft" && <StatusBadge status="draft" />}
-          {featured && <span className="eyebrow">Latest story</span>}
+    <article className={`card${featured ? " card-featured" : ""}${post.cover_image_url ? " has-cover" : ""}`}>
+      {post.cover_image_url && (
+        <div className="card-cover">
+          <img src={post.cover_image_url} alt="" loading="lazy" />
         </div>
-        <h2 className="card-title">{post.title}</h2>
-        <p className="card-excerpt">{excerpt(withoutLeadingTitle(post.content, post.title), featured ? 260 : 150) || "No content yet."}</p>
-      </Link>
-      <Byline post={post} size={featured ? 36 : 28} />
+      )}
+      <div className="card-main">
+        <Link to={`/posts/${post.id}`} className="card-link">
+          <div className="card-top">
+            {post.status === "draft" && <StatusBadge status="draft" />}
+            {featured && <span className="eyebrow">Latest story</span>}
+          </div>
+          <h2 className="card-title">{post.title}</h2>
+          <p className="card-excerpt">{excerpt(withoutLeadingTitle(post.content, post.title), featured ? 260 : 150) || "No content yet."}</p>
+        </Link>
+        <Byline post={post} size={featured ? 36 : 28} />
+      </div>
     </article>
   );
 }
