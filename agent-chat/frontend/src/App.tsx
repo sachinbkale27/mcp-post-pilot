@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { FilePlus2, ListChecks, Menu, ScanSearch, Sparkles, SquarePen } from "lucide-react";
-import { getMcpInfo, resetChat, streamChat, type AgentEvent, type McpInfo } from "./api";
+import { BLOG_URL, getMcpInfo, resetChat, streamChat, type AgentEvent, type McpInfo } from "./api";
 import { Composer } from "./components/Composer";
 import { AgentTurn, UserMessage, type Step, type Turn } from "./components/Messages";
 import { Brand, Sidebar } from "./components/Sidebar";
@@ -130,7 +130,9 @@ export function App() {
               </div>
               <h2>What should we publish today?</h2>
               <p>
-                I work on the blog through {info ? info.tools.length : "its"} MCP tools: I can find and read posts,
+                I work on the blog{" "}
+                <a href={BLOG_URL} target="_blank" rel="noreferrer">Post Pilot</a>{" "}
+                through {info ? info.tools.length : "its"} MCP tools: I can find and read posts,
                 draft new ones, edit, publish or delete them. You'll see every tool call as it happens.
               </p>
               <div className="suggestions">
