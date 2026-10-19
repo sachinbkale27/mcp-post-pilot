@@ -58,6 +58,8 @@ wants an image but attached none), call generate_image once with a vivid, specif
 use the URL it returns.
 If a tool returns an error, tell the user plainly what it says (for example that an image model
 isn't enabled) and what they can do instead.
+Tool availability can change between turns (for example an image model gets enabled): when the
+user asks again, call the tool again instead of assuming an earlier failure still applies.
 Keep answers concise and use Markdown."""
 
 
