@@ -1,0 +1,38 @@
+sequenceDiagram
+    autonumber
+    actor Author
+    participant UI as Blog UI (React)
+    participant CF as CloudFront + edge function
+    participant API as Blog API (Lambda)
+    participant DB as Posts (DynamoDB)
+
+    Author->>UI: Open blog-app.sachin-kale.com/new
+    UI->>CF: GET /new
+    CF-->>UI: /index.html from S3 (SPA fallback)
+
+    Author->>UI: Fill in title, author, Markdown, then Save draft
+    UI->>CF: POST /api/blog/posts {title, content, author}
+    CF->>API: POST /posts (+ x-origin-secret)
+    API->>DB: UpdateItem counter id=0, ADD next_id 1
+    DB-->>API: next_id = 7
+    API->>DB: PutItem {id: 7, status: draft, ...}
+    API-->>UI: 201 Post 7 (draft)
+
+    Author->>UI: Edit, then Save changes
+    UI->>CF: PATCH /api/blog/posts/7 {content}
+    CF->>API: PATCH /posts/7
+    API->>DB: UpdateItem SET content, updated_at (only if it exists)
+    API-->>UI: 200 Post 7
+
+    Author->>UI: Publish
+    UI->>CF: POST /api/blog/posts/7/publish
+    CF->>API: POST /posts/7/publish
+    API->>DB: UpdateItem SET status=published, published_at=now
+    API-->>UI: 200 Post 7 (published)
+
+    Author->>UI: Delete, then confirm
+    UI->>CF: DELETE /api/blog/posts/7
+    CF->>API: DELETE /posts/7
+    API->>DB: DeleteItem id=7 (only if it exists)
+    API-->>UI: 204 No Content
+    UI-->>Author: Back to the post list

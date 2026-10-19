@@ -1,0 +1,29 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Chat UI
+    participant A1 as Agent (Lambda instance A)
+    participant A2 as Agent (Lambda instance B)
+    participant CH as Chats (DynamoDB)
+    participant LLM as OpenAI
+
+    User->>UI: Turn 1 "Create a post called Hello"
+    UI->>A1: POST /chat {message}
+    A1-->>UI: SSE conversation {id: c42}
+    A1->>CH: GetItem c42 (empty)
+    Note over A1: tools run (as in use case 3)
+    A1->>CH: PutItem c42 [human, ai + tool calls, tool results, ai]
+    A1-->>UI: SSE done
+
+    User->>UI: Turn 2 "What was its title?"
+    UI->>A2: POST /chat {message, conversation_id: c42}
+    A2->>CH: GetItem c42
+    CH-->>A2: earlier messages
+    A2->>LLM: earlier messages + new question
+    LLM-->>A2: "It was called Hello" (no tools needed)
+    A2->>CH: PutItem c42 (history + this turn)
+    A2-->>UI: tokens, done
+
+    User->>UI: New chat
+    UI->>A2: DELETE /chat/c42
+    A2->>CH: DeleteItem c42

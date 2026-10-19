@@ -1,0 +1,13 @@
+{
+  "theme": "default",
+  "sequence": {
+    "showSequenceNumbers": true,
+    "mirrorActors": false,
+    "wrap": true,
+    "width": 170,
+    "actorMargin": 70,
+    "messageMargin": 42,
+    "noteMargin": 12
+  },
+  "themeVariables": { "fontFamily": "Inter, Helvetica, Arial, sans-serif" }
+}

@@ -1,0 +1,29 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant AG as Agent (LangGraph)
+    participant LLM as OpenAI
+    participant MCP as MCP server
+    participant API as Blog API
+    participant DB as Posts (DynamoDB)
+
+    User->>AG: "Write a short post about MCP and publish it"
+    AG->>LLM: messages + tools
+    LLM-->>AG: tool_call create_post {title, content, author}
+    AG->>MCP: tools/call create_post
+    MCP->>API: POST /posts
+    API->>DB: counter + PutItem
+    API-->>MCP: 201 {id: 8, status: draft}
+    MCP-->>AG: result {id: 8, ...}
+
+    AG->>LLM: messages + result
+    LLM-->>AG: tool_call publish_post {post_id: 8}
+    AG->>MCP: tools/call publish_post
+    MCP->>API: POST /posts/8/publish
+    API->>DB: UpdateItem status=published
+    API-->>MCP: 200 {id: 8, status: published}
+    MCP-->>AG: result
+
+    AG->>LLM: messages + result
+    LLM-->>AG: streamed answer "Published post 8 ..."
+    AG-->>User: tokens over SSE

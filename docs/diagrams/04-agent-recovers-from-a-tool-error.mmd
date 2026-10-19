@@ -1,0 +1,27 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant AG as Agent
+    participant LLM as OpenAI
+    participant MCP as MCP server
+    participant API as Blog API
+
+    User->>AG: "Show me post 9999, or list the drafts if it doesn't exist"
+    AG->>LLM: messages + tools
+    LLM-->>AG: tool_call get_post {post_id: 9999}
+    AG->>MCP: tools/call get_post
+    MCP->>API: GET /posts/9999
+    API-->>MCP: 404 "Post 9999 not found"
+    Note over MCP: ToolError, so the message is kept<br/>(other exceptions are masked)
+    MCP-->>AG: isError: true, "404: Post 9999 not found"
+    AG-->>User: SSE tool_result (is_error: true)
+
+    AG->>LLM: messages + error result
+    LLM-->>AG: tool_call list_posts {status: "draft"}
+    AG->>MCP: tools/call list_posts
+    MCP->>API: GET /posts?status=draft
+    API-->>MCP: 200 [...]
+    MCP-->>AG: result
+    AG->>LLM: messages + result
+    LLM-->>AG: "Post 9999 doesn't exist. Here are the drafts: ..."
+    AG-->>User: tokens over SSE

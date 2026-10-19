@@ -1,0 +1,18 @@
+sequenceDiagram
+    autonumber
+    participant UI as Chat UI sidebar
+    participant AG as Agent
+    participant MCP as MCP server
+
+    UI->>AG: GET /api/agent/mcp/info
+    AG->>MCP: initialize
+    MCP-->>AG: name "blog", instructions, capabilities
+    AG->>MCP: tools/list
+    MCP-->>AG: list_posts, search_posts, get_post, create_post, update_post, publish_post, unpublish_post, delete_post
+    AG->>MCP: resources/list
+    MCP-->>AG: blog://posts
+    AG->>MCP: resources/templates/list
+    MCP-->>AG: blog://posts/{post_id}
+    AG->>MCP: prompts/list
+    MCP-->>AG: draft_blog_post, review_post
+    AG-->>UI: {server_url, model, tools, resources, resource_templates, prompts}

@@ -1,0 +1,18 @@
+sequenceDiagram
+    autonumber
+    actor Visitor
+    actor Attacker
+    participant CF as CloudFront + edge function
+    participant API as Blog API (Lambda URL)
+
+    Visitor->>CF: GET /api/blog/posts
+    alt viewer IP not in AllowedCidrs
+        CF-->>Visitor: 403 Forbidden (at the edge, no Lambda invoked)
+    else allowed
+        CF->>API: GET /posts + x-origin-secret
+        API-->>CF: 200 [posts]
+        CF-->>Visitor: 200 [posts]
+    end
+
+    Attacker->>API: GET https://...lambda-url.../posts (direct, no secret)
+    API-->>Attacker: 403 Forbidden (OriginSecretMiddleware)

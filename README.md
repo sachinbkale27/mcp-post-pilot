@@ -124,6 +124,9 @@ browser ──HTTPS──► CloudFront ── edge function: IP allow-list, /ap
 
 ## How it works
 
+Step-by-step sequence diagrams for every flow (blog CRUD, agent tool calls, error recovery, memory,
+deploys) are in [USECASES.md](USECASES.md).
+
 1. **Transport.** The server speaks MCP over *Streamable HTTP*: JSON-RPC 2.0 messages POSTed to one
    endpoint (`/mcp`), with responses returned as JSON or an SSE stream. (The other standard transport is
    *stdio*, where a client launches the server as a subprocess, which is how Claude Desktop and Claude Code run local servers.)

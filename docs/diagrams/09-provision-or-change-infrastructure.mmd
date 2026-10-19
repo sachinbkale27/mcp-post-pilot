@@ -1,0 +1,27 @@
+sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant P as provision.sh
+    participant SSM as Parameter Store
+    participant CERT as CloudFormation (us-east-1)
+    participant R53 as Route 53
+    participant ECR as ECR
+    participant CFN as CloudFormation (ap-south-1)
+
+    Dev->>P: deploy/provision.sh [allowed CIDRs]
+    P->>SSM: get or create /mcp-post-pilot-infra/origin-secret
+    opt custom domains set in deploy/config.env
+        P->>CERT: deploy certificate stack (ACM, DNS validation)
+        CERT->>R53: validation CNAME records
+        CERT-->>P: certificate ARN once issued
+    end
+    alt functions already exist
+        P->>P: reuse the image tag CI last deployed
+    else first run
+        P->>CFN: create stack with no image (ECR repositories only)
+        P->>ECR: push images, or reuse ones the workflow already pushed
+    end
+    P->>CFN: deploy stack (Lambdas, DynamoDB, S3, CloudFront, edge function, DNS records, CI policy)
+    CFN->>R53: A alias records for blog-app and agent-chat
+    CFN-->>P: outputs (URLs, function names, bucket, distribution)
+    P-->>Dev: outputs table

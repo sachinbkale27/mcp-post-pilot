@@ -1,0 +1,22 @@
+sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant GH as GitHub Actions
+    participant CFN as CloudFormation
+    participant ECR as ECR
+    participant SSM as Parameter Store
+    participant L as Lambda (blog, mcp, agent)
+    participant S3 as S3
+    participant CF as CloudFront
+
+    Dev->>GH: git push origin main
+    GH->>CFN: DescribeStacks (function names, bucket, distribution)
+    GH->>GH: docker build blog-app and agent-chat
+    GH->>ECR: push blog:sha and agent:sha
+    GH->>SSM: PutParameter OPENAI_API_KEY, LANGSMITH_* (from repo secrets and variables)
+    GH->>L: UpdateFunctionCode blog, mcp (blog image), agent
+    L-->>GH: LastUpdateStatus Successful
+    GH->>GH: npm build blog UI (/api/blog) and chat UI (base /chat/)
+    GH->>S3: sync assets (immutable), index.html (no-cache)
+    GH->>CF: CreateInvalidation /index.html, /chat/index.html
+    GH-->>Dev: job summary with the live URLs

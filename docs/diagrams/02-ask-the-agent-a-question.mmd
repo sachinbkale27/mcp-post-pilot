@@ -1,0 +1,50 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Chat UI (React)
+    participant CF as CloudFront + edge function
+    participant AG as Agent (Lambda, LangGraph)
+    participant CH as Chats (DynamoDB)
+    participant LLM as OpenAI
+    participant MCP as MCP server (Lambda)
+    participant API as Blog API (Lambda)
+    participant LS as LangSmith
+
+    User->>UI: "Which posts are published?"
+    UI->>CF: POST /api/agent/chat {message, conversation_id}
+    CF->>AG: POST /chat (response streaming)
+    AG-->>UI: SSE conversation {id}
+    AG->>CH: GetItem thread_id
+    CH-->>AG: earlier messages (none yet)
+
+    Note over AG,MCP: One MCP session per turn
+    AG->>MCP: POST /mcp initialize
+    MCP-->>AG: server info + capabilities
+    AG->>MCP: POST /mcp tools/list
+    MCP-->>AG: 8 tools with JSON Schemas
+    AG-->>UI: SSE mcp_connected {tools}
+
+    Note over AG,LLM: LangGraph "agent" node
+    AG->>LLM: messages + tools as OpenAI functions (streaming)
+    LLM-->>AG: tool_call list_posts {status: "published"}
+    AG-->>UI: SSE tool_call list_posts
+
+    Note over AG,API: LangGraph "tools" node
+    AG->>MCP: POST /mcp tools/call list_posts
+    MCP->>API: GET /posts?status=published
+    API-->>MCP: 200 [posts]
+    MCP-->>AG: result (structuredContent)
+    AG-->>UI: SSE tool_result list_posts
+
+    Note over AG,LLM: back to the "agent" node
+    AG->>LLM: messages + tool result (streaming)
+    loop every generated token
+        LLM-->>AG: token
+        AG-->>UI: SSE token {text}
+    end
+    LLM-->>AG: done, no more tool calls (route to END)
+
+    AG->>CH: PutItem thread_id {messages, expires_at = now + 7 days}
+    AG->>LS: flush traces (agent, ChatOpenAI, mcp tools/call spans)
+    AG-->>UI: SSE done
+    UI-->>User: Rendered Markdown answer
