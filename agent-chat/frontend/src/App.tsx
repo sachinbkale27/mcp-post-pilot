@@ -68,9 +68,11 @@ export function App() {
   const stickToBottom = useRef(true);
   const busy = turns.some((t) => t.pending);
 
-  useEffect(() => {
+  const loadInfo = () => {
+    setInfoError(undefined);
     getMcpInfo().then(setInfo).catch((e) => setInfoError(e.message));
-  }, []);
+  };
+  useEffect(loadInfo, []);
 
   useEffect(() => {
     const first = turns[0] && (turns[0].user || "Images");
@@ -146,6 +148,7 @@ export function App() {
         busy={busy}
         open={sidebarOpen}
         onNewChat={newChat}
+        onRetry={loadInfo}
         onClose={() => setSidebarOpen(false)}
       />
       {sidebarOpen && <div className="scrim" onClick={() => setSidebarOpen(false)} />}

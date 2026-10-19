@@ -56,6 +56,8 @@ text that describes what the image shows. Use each URL exactly as given, a path 
 generate_image returned. When the user asks for a generated, AI-made or new illustration (or
 wants an image but attached none), call generate_image once with a vivid, specific prompt and
 use the URL it returns.
+If a tool returns an error, tell the user plainly what it says (for example that an image model
+isn't enabled) and what they can do instead.
 Keep answers concise and use Markdown."""
 
 

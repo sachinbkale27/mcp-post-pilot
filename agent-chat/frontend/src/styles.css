@@ -113,6 +113,7 @@ button { font: inherit; color: inherit; }
 .panel-head.sub { margin: 16px 0 8px; }
 .panel-head .count { margin-left: auto; padding: 2px 7px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); color: var(--text-2); letter-spacing: 0; }
 .panel-error { margin: 0; color: var(--danger); font-size: 13px; }
+.link-btn { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
 .status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; letter-spacing: 0.02em; text-transform: none; font-size: 12px; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
 .status-online { color: var(--ok); } .status-online .status-dot { background: var(--ok); box-shadow: 0 0 0 3px rgb(52 211 153 / 0.18); }

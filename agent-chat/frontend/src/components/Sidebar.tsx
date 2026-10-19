@@ -8,6 +8,7 @@ interface Props {
   busy: boolean;
   open: boolean;
   onNewChat: () => void;
+  onRetry: () => void;
   onClose: () => void;
 }
 
@@ -23,7 +24,7 @@ export function Brand() {
   );
 }
 
-export function Sidebar({ info, infoError, busy, open, onNewChat, onClose }: Props) {
+export function Sidebar({ info, infoError, busy, open, onNewChat, onRetry, onClose }: Props) {
   const status = infoError ? "offline" : info ? "online" : "connecting";
 
   return (
@@ -46,7 +47,11 @@ export function Sidebar({ info, infoError, busy, open, onNewChat, onClose }: Pro
             <span className="status-dot" /> {status === "online" ? "Connected" : status === "offline" ? "Offline" : "Connecting"}
           </span>
         </div>
-        {infoError && <p className="panel-error">{infoError}</p>}
+        {infoError && (
+          <p className="panel-error">
+            {infoError} · <button className="link-btn" onClick={onRetry}>Retry</button>
+          </p>
+        )}
         {info && (
           <dl className="facts">
             <div><dt>Server</dt><dd>blog</dd></div>

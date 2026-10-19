@@ -37,10 +37,23 @@ export interface McpInfo {
   prompts: { name: string; description: string | null }[];
 }
 
-export async function getMcpInfo(): Promise<McpInfo> {
-  const res = await fetch(`${API_URL}/mcp/info`);
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);
-  return res.json();
+/**
+ * What the MCP server offers. Retries with backoff: on serverless the first request after a
+ * deploy or an idle period can fail or be slow while the Lambdas cold-start.
+ */
+export async function getMcpInfo(attempts = 4): Promise<McpInfo> {
+  let lastError: Error = new Error("Cannot reach the agent");
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1500 * 2 ** (i - 1)));
+    try {
+      const res = await fetch(`${API_URL}/mcp/info`);
+      if (res.ok) return res.json();
+      lastError = new Error((await res.json().catch(() => ({}))).detail ?? `${res.status} ${res.statusText}`);
+    } catch (e) {
+      lastError = e as Error;
+    }
+  }
+  throw lastError;
 }
 
 /**
