@@ -12,9 +12,15 @@ export interface Post {
   updated_at: string;
   published_at: string | null;
   cover_image_url?: string | null;
+  category?: string | null;
 }
 
-export type PostInput = Pick<Post, "title" | "content" | "author">;
+export interface Category {
+  name: string;
+  count: number;
+}
+
+export type PostInput = Pick<Post, "title" | "content" | "author"> & { category?: string | null };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -29,13 +35,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  list: (filters: { status?: PostStatus; q?: string } = {}) => {
+  list: (filters: { status?: PostStatus; q?: string; category?: string } = {}) => {
     const params = new URLSearchParams();
     if (filters.status) params.set("status", filters.status);
     if (filters.q) params.set("q", filters.q);
+    if (filters.category) params.set("category", filters.category);
     const query = params.toString();
     return request<Post[]>(`/posts${query ? `?${query}` : ""}`);
   },
+  categories: (status?: PostStatus) => request<Category[]>(`/categories${status ? `?status=${status}` : ""}`),
   get: (id: number) => request<Post>(`/posts/${id}`),
   create: (body: PostInput) => request<Post>("/posts", { method: "POST", body: JSON.stringify(body) }),
   update: (id: number, body: Partial<PostInput>) =>

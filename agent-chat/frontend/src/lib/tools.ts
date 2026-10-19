@@ -1,6 +1,6 @@
 /** How agent tool calls are presented: kind, icon and plain-language labels. */
 import {
-  BookOpen, FilePen, FilePlus2, FileSearch, List, type LucideIcon, Send, Trash2, Undo2, WandSparkles, Wrench,
+  BookOpen, FilePen, FilePlus2, FileSearch, List, type LucideIcon, Send, Tags, Trash2, Undo2, WandSparkles, Wrench,
 } from "lucide-react";
 
 export type ToolKind = "read" | "write" | "destructive";
@@ -20,9 +20,10 @@ const quoted = (v: unknown) => (typeof v === "string" && v ? `“${v.length > 48
 const TOOLS: Record<string, ToolMeta> = {
   list_posts: {
     kind: "read", icon: List,
-    running: (a) => `Listing ${a.status ? `${a.status} ` : ""}posts`,
-    done: (a) => `Listed ${a.status ? `${a.status} ` : ""}posts`,
+    running: (a) => `Listing ${a.status ? `${a.status} ` : ""}posts${a.category ? ` in ${a.category}` : ""}`,
+    done: (a) => `Listed ${a.status ? `${a.status} ` : ""}posts${a.category ? ` in ${a.category}` : ""}`,
   },
+  list_categories: { kind: "read", icon: Tags, running: () => "Checking categories", done: () => "Checked categories" },
   search_posts: {
     kind: "read", icon: FileSearch,
     running: (a) => `Searching posts for ${quoted(a.query)}`,

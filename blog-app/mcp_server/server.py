@@ -75,7 +75,7 @@ async def _api(method: str, path: str, **kwargs) -> dict | list | None:
 
 
 def _summary(post: dict) -> dict:
-    return {k: post[k] for k in ("id", "title", "author", "status", "updated_at")}
+    return {k: post.get(k) for k in ("id", "title", "author", "status", "category", "updated_at")}
 
 
 # ---------------------------------------------------------------- tools
@@ -84,14 +84,28 @@ READ_ONLY = ToolAnnotations(readOnlyHint=True)
 
 
 @mcp.tool(annotations=READ_ONLY)
-async def list_posts(status: Literal["draft", "published"] | None = None) -> list[dict]:
+async def list_posts(
+    status: Literal["draft", "published"] | None = None,
+    category: str | None = None,
+) -> list[dict]:
     """List blog posts (without their full content), newest first.
 
     Args:
         status: Only return posts with this status. Omit to return all posts.
+        category: Only return posts in this category (case-insensitive).
+    """
+    params = {k: v for k, v in {"status": status, "category": category}.items() if v}
+    return [_summary(p) for p in await _api("GET", "/posts", params=params)]
+
+
+@mcp.tool(annotations=READ_ONLY)
+async def list_categories(status: Literal["draft", "published"] | None = None) -> list[dict]:
+    """List the subject categories in use, with how many posts are in each (most used first).
+
+    Check this before choosing a category for a post, and reuse an existing one when it fits.
     """
     params = {"status": status} if status else {}
-    return [_summary(p) for p in await _api("GET", "/posts", params=params)]
+    return await _api("GET", "/categories", params=params)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -112,15 +126,18 @@ async def create_post(
     content: str,
     author: str = "anonymous",
     cover_image_url: str | None = None,
+    category: str | None = None,
 ) -> dict:
     """Create a new post as a draft. Content is Markdown.
 
     Args:
+        category: The broad subject the post falls under, e.g. "Science", "Technology",
+            "Politics", "Nature". Reuse an existing category from list_categories when one fits.
         cover_image_url: Image shown on the post card and automatically at the top of the
             article, e.g. /media/abc.webp. Don't repeat the cover image inside the content.
             Other images go in the content as ![alt text](url).
     """
-    body = {"title": title, "content": content, "author": author, "cover_image_url": cover_image_url}
+    body = {"title": title, "content": content, "author": author, "cover_image_url": cover_image_url, "category": category}
     return await _api("POST", "/posts", json=body)
 
 
@@ -131,16 +148,19 @@ async def update_post(
     content: str | None = None,
     author: str | None = None,
     cover_image_url: str | None = None,
+    category: str | None = None,
 ) -> dict:
     """Update fields of an existing post. Only the fields you pass are changed.
 
     Args:
         cover_image_url: New cover image URL (one the user provided). Pass "" to remove the cover.
+        category: New subject category (reuse one from list_categories when it fits). Pass "" to clear it.
     """
-    fields = {"title": title, "content": content, "author": author, "cover_image_url": cover_image_url}
+    fields = {"title": title, "content": content, "author": author, "cover_image_url": cover_image_url, "category": category}
     body = {k: v for k, v in fields.items() if v is not None}
-    if body.get("cover_image_url") == "":
-        body["cover_image_url"] = None
+    for key in ("cover_image_url", "category"):
+        if body.get(key) == "":
+            body[key] = None
     return await _api("PATCH", f"/posts/{post_id}", json=body)
 
 

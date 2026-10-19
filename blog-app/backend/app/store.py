@@ -17,11 +17,20 @@ Post = dict[str, Any]
 
 
 class PostStore(Protocol):
-    def list(self, status: str | None = None, q: str | None = None) -> list[Post]: ...
+    def list(self, status: str | None = None, q: str | None = None, category: str | None = None) -> list[Post]: ...
     def create(self, fields: dict[str, Any]) -> Post: ...
     def get(self, post_id: int) -> Post | None: ...
     def update(self, post_id: int, fields: dict[str, Any]) -> Post | None: ...
     def delete(self, post_id: int) -> bool: ...
+
+
+def category_counts(posts: list[Post]) -> list[tuple[str, int]]:
+    """(category, number of posts), most used first; posts without a category are skipped."""
+    counts: dict[str, int] = {}
+    for post in posts:
+        if post.get("category"):
+            counts[post["category"]] = counts.get(post["category"], 0) + 1
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0].lower()))
 
 
 def _now() -> datetime:
@@ -38,14 +47,15 @@ class SqlPostStore:
         # create_all doesn't alter existing tables: add columns introduced later.
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE posts ADD COLUMN IF NOT EXISTS cover_image_url VARCHAR(500)"))
+            conn.execute(text("ALTER TABLE posts ADD COLUMN IF NOT EXISTS category VARCHAR(60)"))
         self._sessions = SessionLocal
 
     @staticmethod
     def _to_dict(post) -> Post:
         return {c.name: getattr(post, c.name) for c in post.__table__.columns}
 
-    def list(self, status=None, q=None):
-        from sqlalchemy import or_, select
+    def list(self, status=None, q=None, category=None):
+        from sqlalchemy import func, or_, select
 
         from .models import Post as PostRow
 
@@ -55,6 +65,8 @@ class SqlPostStore:
         if q:
             like = f"%{q}%"
             stmt = stmt.where(or_(PostRow.title.ilike(like), PostRow.content.ilike(like)))
+        if category:
+            stmt = stmt.where(func.lower(PostRow.category) == category.lower())
         with self._sessions() as db:
             return [self._to_dict(p) for p in db.scalars(stmt)]
 
@@ -128,7 +140,7 @@ class DynamoPostStore:
     def _is_missing(self, exc) -> bool:
         return exc.response["Error"]["Code"] == "ConditionalCheckFailedException"
 
-    def list(self, status=None, q=None):
+    def list(self, status=None, q=None, category=None):
         items, kwargs = [], {}
         while True:
             page = self._table.scan(**kwargs)
@@ -142,6 +154,8 @@ class DynamoPostStore:
         if q:
             needle = q.lower()
             posts = [p for p in posts if needle in p["title"].lower() or needle in p["content"].lower()]
+        if category:
+            posts = [p for p in posts if (p.get("category") or "").lower() == category.lower()]
         return sorted(posts, key=lambda p: p["updated_at"], reverse=True)
 
     def create(self, fields):

@@ -22,3 +22,5 @@ class Post(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Shown on post cards and at the top of the article; usually a /media/... URL.
     cover_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Subject the post falls under (e.g. "Science"); shown in the blog's Topics panel.
+    category: Mapped[str | None] = mapped_column(String(60), nullable=True)

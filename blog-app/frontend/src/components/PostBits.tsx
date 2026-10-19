@@ -47,6 +47,7 @@ export function PostCard({ post, featured = false }: { post: Post; featured?: bo
           <div className="card-top">
             {post.status === "draft" && <StatusBadge status="draft" />}
             {featured && <span className="eyebrow">Latest story</span>}
+            {post.category && <span className="category-label">{post.category}</span>}
           </div>
           <h2 className="card-title">{post.title}</h2>
           <p className="card-excerpt">{excerpt(withoutLeadingTitle(post.content, post.title), featured ? 260 : 150) || "No content yet."}</p>

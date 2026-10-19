@@ -9,6 +9,7 @@ class PostCreate(BaseModel):
     content: str = ""
     author: str = "anonymous"
     cover_image_url: str | None = Field(default=None, max_length=500)
+    category: str | None = Field(default=None, max_length=60)
 
 
 class PostUpdate(BaseModel):
@@ -16,6 +17,7 @@ class PostUpdate(BaseModel):
     content: str | None = None
     author: str | None = None
     cover_image_url: str | None = Field(default=None, max_length=500)
+    category: str | None = Field(default=None, max_length=60)
 
 
 class PostOut(BaseModel):
@@ -30,3 +32,9 @@ class PostOut(BaseModel):
     updated_at: datetime
     published_at: datetime | None
     cover_image_url: str | None = None
+    category: str | None = None
+
+
+class CategoryOut(BaseModel):
+    name: str
+    count: int

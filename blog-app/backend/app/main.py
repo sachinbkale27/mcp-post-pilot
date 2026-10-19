@@ -11,8 +11,8 @@ from fastapi.staticfiles import StaticFiles
 
 from .media import IMAGE_TYPES, MAX_IMAGE_BYTES, canonical_media_urls, get_media_store, local_media_dir, looks_like_image
 from .origin import OriginSecretMiddleware
-from .schemas import PostCreate, PostOut, PostUpdate
-from .store import Post, PostStore, get_store
+from .schemas import CategoryOut, PostCreate, PostOut, PostUpdate
+from .store import Post, PostStore, category_counts, get_store
 
 app = FastAPI(title="Blog API")
 app.add_middleware(
@@ -30,11 +30,23 @@ if not os.getenv("MEDIA_BUCKET"):
     app.mount("/media", StaticFiles(directory=local_media_dir()), name="media")
 
 
-def _clean(fields: dict) -> dict:
-    """Store links to uploaded images in one canonical form (/media/<name>)."""
+def _clean(fields: dict, store: PostStore) -> dict:
+    """Normalize fields before saving.
+
+    - links to uploaded images get one canonical form (/media/<name>)
+    - categories are trimmed, and reuse the spelling of an existing category that matches
+      case-insensitively, so "science" doesn't become a second "Science" topic
+    """
     for key in ("content", "cover_image_url"):
         if fields.get(key):
             fields[key] = canonical_media_urls(fields[key])
+    if "category" in fields:
+        name = " ".join((fields["category"] or "").split())
+        if not name:
+            fields["category"] = None
+        else:
+            existing = {c.lower(): c for c, _ in category_counts(store.list())}
+            fields["category"] = existing.get(name.lower(), name)
     return fields
 
 
@@ -48,14 +60,24 @@ def _found(post: Post | None, post_id: int) -> Post:
 def list_posts(
     status: Literal["draft", "published"] | None = None,
     q: str | None = None,
+    category: str | None = None,
     store: PostStore = Depends(get_store),
 ):
-    return store.list(status=status, q=q)
+    return store.list(status=status, q=q, category=category)
+
+
+@app.get("/categories", response_model=list[CategoryOut])
+def list_categories(
+    status: Literal["draft", "published"] | None = None,
+    store: PostStore = Depends(get_store),
+):
+    """Subjects in use, with how many posts (optionally only drafts or published) fall under each."""
+    return [{"name": name, "count": count} for name, count in category_counts(store.list(status=status))]
 
 
 @app.post("/posts", response_model=PostOut, status_code=201)
 def create_post(body: PostCreate, store: PostStore = Depends(get_store)):
-    return store.create(_clean(body.model_dump()))
+    return store.create(_clean(body.model_dump(), store))
 
 
 @app.get("/posts/{post_id}", response_model=PostOut)
@@ -65,7 +87,7 @@ def get_post(post_id: int, store: PostStore = Depends(get_store)):
 
 @app.patch("/posts/{post_id}", response_model=PostOut)
 def update_post(post_id: int, body: PostUpdate, store: PostStore = Depends(get_store)):
-    return _found(store.update(post_id, _clean(body.model_dump(exclude_unset=True))), post_id)
+    return _found(store.update(post_id, _clean(body.model_dump(exclude_unset=True), store)), post_id)
 
 
 @app.post("/posts/{post_id}/publish", response_model=PostOut)

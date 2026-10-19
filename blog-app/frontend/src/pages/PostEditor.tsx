@@ -3,12 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowLeft, Eye, PenLine, Send } from "lucide-react";
-import { api, type Post, type PostInput } from "../api";
+import { api, type Category, type Post, type PostInput } from "../api";
 import { ConfirmDialog, useToast } from "../components/Feedback";
 import { readingTime, withoutCoverImage, withoutLeadingTitle, wordCount } from "../lib/format";
 import { usePageTitle } from "../lib/usePageTitle";
 
-const EMPTY: PostInput = { title: "", content: "", author: "" };
+const EMPTY: PostInput = { title: "", content: "", author: "", category: "" };
 
 export function PostEditor() {
   const { id } = useParams();
@@ -20,6 +20,7 @@ export function PostEditor() {
   const [mode, setMode] = useState<"write" | "preview">("write");
   const [saving, setSaving] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
 
@@ -30,13 +31,17 @@ export function PostEditor() {
     if (!id) return;
     api.get(Number(id))
       .then((p) => {
-        const loaded = { title: p.title, content: p.content, author: p.author };
+        const loaded = { title: p.title, content: p.content, author: p.author, category: p.category ?? "" };
         setPost(p);
         setForm(loaded);
         setSaved(loaded);
       })
       .catch((e) => notify("error", e.message));
   }, [id, notify]);
+
+  useEffect(() => {
+    api.categories().then(setCategories).catch(() => setCategories([]));
+  }, []);
 
   // Grow the title and body fields with their text, like a document.
   useEffect(() => {
@@ -136,7 +141,21 @@ export function PostEditor() {
               onChange={set("title")}
               onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
             />
-            <input className="editor-author" placeholder="Author name" aria-label="Author" value={form.author} onChange={set("author")} />
+            <div className="editor-meta">
+              <input className="editor-author" placeholder="Author name" aria-label="Author" value={form.author} onChange={set("author")} />
+              <input
+                className="editor-category"
+                placeholder="Topic, e.g. Science"
+                aria-label="Topic"
+                list="topic-options"
+                maxLength={60}
+                value={form.category ?? ""}
+                onChange={set("category")}
+              />
+              <datalist id="topic-options">
+                {categories.map((c) => <option key={c.name} value={c.name} />)}
+              </datalist>
+            </div>
             <textarea
               ref={contentRef}
               className="editor-content"

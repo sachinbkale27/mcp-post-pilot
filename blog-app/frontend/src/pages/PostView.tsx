@@ -7,6 +7,7 @@ import { api, type Post } from "../api";
 import { CHAT_URL } from "../components/Layout";
 import { ConfirmDialog, EmptyState, useToast } from "../components/Feedback";
 import { Byline, StatusBadge } from "../components/PostBits";
+import { topicHref } from "../components/Topics";
 import { withoutCoverImage, withoutLeadingTitle } from "../lib/format";
 import { usePageTitle } from "../lib/usePageTitle";
 
@@ -77,7 +78,12 @@ export function PostView() {
       <Link to="/" className="back-link"><ArrowLeft size={16} aria-hidden /> All stories</Link>
 
       <header className="article-header">
-        {post.status === "draft" && <StatusBadge status="draft" />}
+        {(post.status === "draft" || post.category) && (
+          <div className="article-tags">
+            {post.category && <Link to={topicHref(post.category)} className="category-chip">{post.category}</Link>}
+            {post.status === "draft" && <StatusBadge status="draft" />}
+          </div>
+        )}
         <h1 className="article-title">{post.title}</h1>
         <div className="article-meta">
           <Byline post={post} size={40} />
