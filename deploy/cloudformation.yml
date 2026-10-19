@@ -136,6 +136,14 @@ Resources:
         Statement:
           - { Effect: Allow, Principal: { Service: lambda.amazonaws.com }, Action: sts:AssumeRole }
       ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole]
+      Policies:
+        - PolicyName: read-settings   # OPENAI_API_KEY for generate_image
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ssm:GetParametersByPath
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/mcp-post-pilot
 
   AgentRole:
     Type: AWS::IAM::Role
@@ -193,13 +201,14 @@ Resources:
         WorkingDirectory: /app
       Role: !GetAtt McpRole.Arn
       MemorySize: 512
-      Timeout: 60
+      Timeout: 150   # generate_image can take up to a minute
       Environment:
         Variables:
           MCP_HOST: 0.0.0.0
           MCP_PORT: "8101"
           MCP_STATELESS: "1"
           BLOG_API_URL: !GetAtt BlogFunctionUrl.FunctionUrl
+          SSM_PARAMETER_PATH: /mcp-post-pilot
           ORIGIN_SECRET: !Ref OriginSecret
           AWS_LWA_PORT: "8101"
           AWS_LWA_READINESS_CHECK_PROTOCOL: tcp

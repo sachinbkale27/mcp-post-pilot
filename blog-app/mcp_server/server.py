@@ -12,6 +12,7 @@ an MCP server is just another client of your existing system.
 Run:  python mcp_server/server.py   ->  Streamable HTTP at http://127.0.0.1:8101/mcp
 """
 
+import base64
 import json
 import os
 from typing import Literal
@@ -22,7 +23,25 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp_types import ToolAnnotations
 
+def _load_settings() -> None:
+    """On AWS, read settings such as OPENAI_API_KEY from Parameter Store (SSM_PARAMETER_PATH)."""
+    path = os.getenv("SSM_PARAMETER_PATH")
+    if not path:
+        return
+    import boto3
+
+    for page in boto3.client("ssm").get_paginator("get_parameters_by_path").paginate(Path=path, WithDecryption=True):
+        for param in page["Parameters"]:
+            os.environ.setdefault(param["Name"].rsplit("/", 1)[-1], param["Value"])
+
+
+_load_settings()
+
 BLOG_API_URL = os.getenv("BLOG_API_URL", "http://127.0.0.1:8100")
+# Image generation (generate_image). OPENAI_IMAGE_API_URL only exists for testing against a stub.
+IMAGE_API_URL = (os.getenv("OPENAI_IMAGE_API_URL") or "https://api.openai.com/v1").rstrip("/")
+IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL") or "gpt-image-1"
+IMAGE_QUALITY = os.getenv("OPENAI_IMAGE_QUALITY") or "medium"
 # On AWS the blog API only accepts requests carrying the shared origin secret.
 ORIGIN_SECRET = os.getenv("ORIGIN_SECRET")
 
@@ -32,7 +51,8 @@ mcp = MCPServer(
         "Tools for managing a blog. Posts start as drafts; publish_post makes "
         "them public. Use list_posts or search_posts to find post ids. Content is "
         "Markdown; images are referenced by URL (![alt text](/media/...)). Use image "
-        "URLs exactly as supplied (a path starting with /media/, no scheme or host)."
+        "URLs exactly as supplied (a path starting with /media/, no scheme or host). "
+        "generate_image creates an AI illustration and returns such a URL."
     ),
 )
 
@@ -140,6 +160,58 @@ async def delete_post(post_id: int) -> str:
     """Permanently delete a post. This cannot be undone."""
     await _api("DELETE", f"/posts/{post_id}")
     return f"Deleted post {post_id}"
+
+
+@mcp.tool(annotations=ToolAnnotations(openWorldHint=True))
+async def generate_image(
+    prompt: str,
+    size: Literal["1536x1024", "1024x1024", "1024x1536"] = "1536x1024",
+) -> dict:
+    """Generate an illustration with an AI image model and store it on the blog.
+
+    Returns {"url": "/media/..."}: use it as cover_image_url and/or inline as ![alt text](url).
+    Each call costs money and can take up to a minute, so make one image per request unless the
+    user asks for more. Describe subject, composition, style and mood; avoid asking for text in
+    the image.
+
+    Args:
+        prompt: What the image should show.
+        size: 1536x1024 (landscape, best for covers), 1024x1024 (square) or 1024x1536 (portrait).
+    """
+    key = os.getenv("OPENAI_API_KEY")
+    if not key:
+        raise BlogAPIError("Image generation isn't configured: the MCP server has no OPENAI_API_KEY")
+
+    body: dict = {"model": IMAGE_MODEL, "prompt": prompt, "n": 1}
+    if IMAGE_MODEL.startswith("dall-e"):
+        # DALL-E uses different sizes and returns a URL unless asked for base64.
+        body |= {"size": {"1536x1024": "1792x1024", "1024x1536": "1024x1792"}.get(size, size), "response_format": "b64_json"}
+    else:
+        body |= {"size": size, "quality": IMAGE_QUALITY}
+
+    async with httpx.AsyncClient(timeout=180) as client:
+        resp = await client.post(f"{IMAGE_API_URL}/images/generations", headers={"Authorization": f"Bearer {key}"}, json=body)
+    if resp.status_code >= 400:
+        try:
+            error = resp.json().get("error") or {}
+        except ValueError:
+            error = {}
+        message = error.get("message", resp.text)
+        if resp.status_code in (403, 404) or error.get("code") == "model_not_found" or "does not have access" in message:
+            raise BlogAPIError(
+                f"The image model '{IMAGE_MODEL}' isn't available to this OpenAI project. "
+                "Enable it in the OpenAI dashboard (Settings > Limits / model access) to generate images."
+            )
+        raise BlogAPIError(f"Image generation failed (HTTP {resp.status_code}): {message}")
+
+    image = base64.b64decode(resp.json()["data"][0]["b64_json"])
+    content_type = "image/png"
+    if image[:3] == b"\xff\xd8\xff":
+        content_type = "image/jpeg"
+    elif image[:4] == b"RIFF" and image[8:12] == b"WEBP":
+        content_type = "image/webp"
+    stored = await _api("POST", "/images", content=image, headers={"Content-Type": content_type})
+    return {"url": stored["url"], "size": size, "model": IMAGE_MODEL}
 
 
 # ------------------------------------------------------------ resources

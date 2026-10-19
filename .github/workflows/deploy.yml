@@ -76,6 +76,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-2024-11-20' }}
+          OPENAI_IMAGE_MODEL: ${{ vars.OPENAI_IMAGE_MODEL || 'gpt-image-1' }}
           LANGSMITH_TRACING: ${{ vars.LANGSMITH_TRACING || 'true' }}
           LANGSMITH_PROJECT: ${{ vars.LANGSMITH_PROJECT || 'mcp-blog-agent' }}
           LANGSMITH_ENDPOINT: ${{ vars.LANGSMITH_ENDPOINT || 'https://api.smith.langchain.com' }}
@@ -90,6 +91,7 @@ jobs:
           put OPENAI_API_KEY SecureString
           put LANGSMITH_API_KEY SecureString
           put OPENAI_MODEL String
+          put OPENAI_IMAGE_MODEL String
           put LANGSMITH_TRACING String
           put LANGSMITH_PROJECT String
           put LANGSMITH_ENDPOINT String

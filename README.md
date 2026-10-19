@@ -122,6 +122,24 @@ browser ──HTTPS──► CloudFront ── edge function: IP allow-list, /ap
 - The posts table has point-in-time recovery and is kept even if the stack is deleted.
 - Logs: CloudWatch log groups `/aws/lambda/mcp-post-pilot-{blog,mcp,agent}`.
 
+## Posts with images
+
+The agent can publish posts with pictures, in two ways:
+
+- **Your photos.** Attach, paste or drop up to 4 images in the chat. The browser resizes them and
+  uploads them to the blog API (`POST /images`: S3 on AWS, a local folder in development; served
+  from `/media/...`). The agent receives each image (gpt-4o can see it) plus its URL, and uses the
+  URL as the post's `cover_image_url` or inline as `![alt text](/media/...)`.
+- **Generated illustrations.** Ask for an AI-made image and the agent calls the MCP tool
+  `generate_image(prompt, size)`. The MCP server calls OpenAI's image API, stores the result through
+  the same `/images` endpoint, and returns its URL. This needs an image model enabled for your
+  OpenAI project (`OPENAI_IMAGE_MODEL`, default `gpt-image-1`; `dall-e-3` also works). Each image
+  costs a few cents. Without access, the tool returns a clear error instead of an image.
+
+Image data never passes through MCP tool calls, only URLs: the UI (or the MCP server, for generated
+images) uploads, and the agent references. The blog API stores links to uploaded images in one
+canonical form, and the deploy never deletes `media/` from the bucket.
+
 ## How it works
 
 Step-by-step sequence diagrams for every flow (blog CRUD, agent tool calls, error recovery, memory,

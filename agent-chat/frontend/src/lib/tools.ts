@@ -1,6 +1,6 @@
 /** How agent tool calls are presented: kind, icon and plain-language labels. */
 import {
-  BookOpen, FilePen, FilePlus2, FileSearch, List, type LucideIcon, Send, Trash2, Undo2, Wrench,
+  BookOpen, FilePen, FilePlus2, FileSearch, List, type LucideIcon, Send, Trash2, Undo2, WandSparkles, Wrench,
 } from "lucide-react";
 
 export type ToolKind = "read" | "write" | "destructive";
@@ -38,7 +38,18 @@ const TOOLS: Record<string, ToolMeta> = {
   publish_post: { kind: "write", icon: Send, running: (a) => `Publishing ${post(a)}`, done: (a) => `Published ${post(a)}` },
   unpublish_post: { kind: "write", icon: Undo2, running: (a) => `Unpublishing ${post(a)}`, done: (a) => `Unpublished ${post(a)}` },
   delete_post: { kind: "destructive", icon: Trash2, running: (a) => `Deleting ${post(a)}`, done: (a) => `Deleted ${post(a)}` },
+  generate_image: {
+    kind: "write", icon: WandSparkles,
+    running: () => "Generating an image",
+    done: () => "Generated an image",
+  },
 };
+
+/** The /media/... image URL in a tool result, if any (generate_image returns one). */
+export function resultImage(output: unknown): string | undefined {
+  const url = output && typeof output === "object" ? (output as Record<string, unknown>).url : undefined;
+  return typeof url === "string" && /^\/media\/[\w.-]+\.(png|jpe?g|webp|gif)$/.test(url) ? url : undefined;
+}
 
 /** Known tools get friendly labels; anything else (another MCP server) falls back to its name. */
 export function toolMeta(name: string): ToolMeta {
@@ -57,6 +68,7 @@ export function summarizeResult(output: unknown): string | undefined {
   if (value && typeof value === "object") {
     const o = value as Record<string, unknown>;
     if (typeof o.title === "string") return o.status ? `${o.title} · ${o.status}` : o.title;
+    if (resultImage(o)) return `${o.size ?? "image"} · ${o.model ?? "AI"}`;
   }
   if (typeof value === "string") return value.length > 60 ? value.slice(0, 59) + "…" : value;
   return undefined;

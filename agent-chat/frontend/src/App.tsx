@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FilePlus2, ImagePlus, ListChecks, Menu, ScanSearch, Sparkles, SquarePen } from "lucide-react";
+import { FilePlus2, ImagePlus, ListChecks, Menu, ScanSearch, Sparkles, SquarePen, WandSparkles } from "lucide-react";
 import { BLOG_URL, getMcpInfo, resetChat, streamChat, uploadImage, type AgentEvent, type McpInfo } from "./api";
 import { Composer, MAX_ATTACHMENTS, type Attachment } from "./components/Composer";
 import { prepareImage } from "./lib/images";
@@ -14,6 +14,21 @@ const SUGGESTIONS = [
 ];
 
 const IMAGE_ONLY_PROMPT = "Here are some images.";
+
+const IMAGE_CAPABILITIES = [
+  {
+    icon: ImagePlus,
+    title: "Post with your photos",
+    body: "Attach, paste or drop up to 4 images. I look at them, write around what they show, and place them as the cover or inline with descriptive alt text.",
+    example: "Write a short post about the attached photo, use it as the cover, and keep it as a draft.",
+  },
+  {
+    icon: WandSparkles,
+    title: "Generate an illustration",
+    body: "No image? Ask for one. I call the generate_image MCP tool, which creates an illustration with an AI image model and stores it on the blog for the post.",
+    example: "Write a short post about autumn in the mountains, with a generated landscape cover image.",
+  },
+];
 
 /** Apply one streamed agent event to the steps of the current turn. */
 function applyEvent(steps: Step[], event: AgentEvent): Step[] {
@@ -165,10 +180,6 @@ export function App() {
                 through {info ? info.tools.length : "its"} MCP tools: I can find and read posts,
                 draft new ones, edit, publish or delete them. You'll see every tool call as it happens.
               </p>
-              <p className="welcome-tip">
-                <ImagePlus size={15} aria-hidden /> Tip: attach photos and ask me to write a post around them. I can
-                see them and use them as the cover or inline.
-              </p>
               <div className="suggestions">
                 {SUGGESTIONS.map(({ icon: Icon, title, prompt }) => (
                   <button key={title} className="suggestion" onClick={() => send(prompt)} disabled={busy}>
@@ -178,6 +189,24 @@ export function App() {
                   </button>
                 ))}
               </div>
+
+              <section className="capabilities" aria-labelledby="images-heading">
+                <h3 id="images-heading"><ImagePlus size={16} aria-hidden /> Posts with images</h3>
+                <div className="capability-grid">
+                  {IMAGE_CAPABILITIES.map(({ icon: Icon, title, body, example }) => (
+                    <div key={title} className="capability">
+                      <span className="capability-icon"><Icon size={18} aria-hidden /></span>
+                      <div>
+                        <strong>{title}</strong>
+                        <p>{body}</p>
+                        <button className="capability-try" onClick={() => setInput(example)} disabled={busy}>
+                          Try it →
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
             </section>
           ) : (
             <div className="thread">

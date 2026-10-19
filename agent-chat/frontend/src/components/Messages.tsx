@@ -2,7 +2,7 @@ import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, ChevronRight, CircleAlert, Copy, LoaderCircle, OctagonX, PlugZap } from "lucide-react";
-import { formatDuration, summarizeResult, toolMeta } from "../lib/tools";
+import { formatDuration, resultImage, summarizeResult, toolMeta } from "../lib/tools";
 
 export type ToolStep = {
   type: "tool";
@@ -53,6 +53,7 @@ function ToolCard({ step }: { step: ToolStep }) {
   const running = step.finishedAt === undefined;
   const summary = !running && !step.isError ? summarizeResult(step.output) : undefined;
   const label = running ? meta.running(step.input) : meta.done(step.input);
+  const image = !running && !step.isError ? resultImage(step.output) : undefined;
 
   return (
     <div className={`tool-card kind-${meta.kind}${step.isError ? " is-error" : ""}${open ? " open" : ""}`}>
@@ -75,6 +76,11 @@ function ToolCard({ step }: { step: ToolStep }) {
         </span>
         <ChevronRight size={14} className="chevron" aria-hidden />
       </button>
+      {image && (
+        <a className="tool-image" href={image} target="_blank" rel="noreferrer">
+          <img src={image} alt={String(step.input.prompt ?? "Generated image")} />
+        </a>
+      )}
       {open && (
         <div className="tool-body">
           <div className="tool-io-label">tools/call <span className="mono">{step.name}</span> · arguments</div>

@@ -52,7 +52,10 @@ guessing. Before deleting a post, make sure the user clearly asked for that spec
 When the user attaches images you can see them, and you are told their URLs. To use one in a
 post, pass it as cover_image_url and/or embed it in the content as ![alt text](url), with alt
 text that describes what the image shows. Use each URL exactly as given, a path starting with
-/media/; never add a scheme or host. Only use image URLs the user actually provided.
+/media/; never add a scheme or host. Only use image URLs the user provided or that
+generate_image returned. When the user asks for a generated, AI-made or new illustration (or
+wants an image but attached none), call generate_image once with a vivid, specific prompt and
+use the URL it returns.
 Keep answers concise and use Markdown."""
 
 
