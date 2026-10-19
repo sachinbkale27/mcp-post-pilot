@@ -183,12 +183,16 @@ img { max-width: 100%; }
 .card.has-cover { padding: 0; overflow: hidden; gap: 0; }
 .card-main { display: flex; flex-direction: column; gap: 18px; flex: 1; min-width: 0; }
 .card.has-cover .card-main { padding: 22px 26px 26px; }
-.card-cover { aspect-ratio: 16 / 9; overflow: hidden; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
-.card-cover img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.4s ease; }
-.card:hover .card-cover img { transform: scale(1.03); }
-.card-featured.has-cover { flex-direction: row-reverse; }
-.card-featured.has-cover .card-cover { flex: 0 0 46%; aspect-ratio: auto; min-height: 340px; border-bottom: 0; border-left: 1px solid var(--border); }
-.card-featured.has-cover .card-main { padding: 40px 44px; justify-content: center; }
+/* 3:2 matches generated images (1536x1024). "contain" never crops: illustrations and diagrams
+   often have labels at the edges; other shapes get a quiet letterbox instead of being cut. */
+.card-cover { aspect-ratio: 3 / 2; overflow: hidden; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+.card-cover img { width: 100%; height: 100%; object-fit: contain; display: block; transition: transform 0.4s ease; }
+.card:hover .card-cover img { transform: scale(1.02); }
+.card-featured.has-cover { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: center; }
+.card-featured.has-cover .card-cover {
+  order: 2; margin: 20px 20px 20px 0; border: 1px solid var(--border); border-radius: var(--radius);
+}
+.card-featured.has-cover .card-main { padding: 40px 36px 40px 44px; justify-content: center; }
 .card-link { display: flex; flex-direction: column; gap: 10px; color: inherit; text-decoration: none !important; }
 .card-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; } /* whole card is clickable */
 .card-top { display: flex; align-items: center; gap: 10px; min-height: 0; }
@@ -238,7 +242,7 @@ img { max-width: 100%; }
 .toolbar { display: flex; align-items: center; gap: 8px; }
 
 .article-cover { margin: 28px 0 0; }
-.article-cover img { display: block; width: 100%; max-height: 520px; object-fit: cover; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+.article-cover img { display: block; width: 100%; height: auto; border-radius: var(--radius-lg); border: 1px solid var(--border); }
 
 /* Long-form typography */
 .prose { font: 400 20px/1.75 var(--font-serif); color: var(--text); margin-top: 28px; overflow-wrap: break-word; }
@@ -350,8 +354,8 @@ img { max-width: 100%; }
   .card { min-height: 0; padding: 22px; }
   .card-featured { padding: 26px 22px; }
   .card-featured .card-excerpt { font-size: 16px; }
-  .card-featured.has-cover { flex-direction: column; }
-  .card-featured.has-cover .card-cover { flex: none; aspect-ratio: 16 / 9; min-height: 0; border-left: 0; border-bottom: 1px solid var(--border); }
+  .card-featured.has-cover { display: flex; flex-direction: column; }
+  .card-featured.has-cover .card-cover { order: 0; margin: 0; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; }
   .card-featured.has-cover .card-main { padding: 22px; }
   .article-wrap { padding: 24px 16px 72px; }
   .prose { font-size: 18px; }
