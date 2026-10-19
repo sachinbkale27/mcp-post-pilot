@@ -117,7 +117,7 @@ jobs:
         if: steps.ready.outputs.ready == 'true'
         run: |
           (cd blog-app/frontend && npm ci && VITE_API_URL=/api/blog VITE_CHAT_URL="${{ steps.stack.outputs.ChatUrl }}" npm run build)
-          (cd agent-chat/frontend && npm ci && VITE_API_URL=/api/agent npm run build -- --base /chat/)
+          (cd agent-chat/frontend && npm ci && VITE_API_URL=/api/agent VITE_BLOG_URL="${{ steps.stack.outputs.BlogUrl }}" npm run build -- --base /chat/)
 
       - name: Upload UIs and refresh CloudFront
         if: steps.ready.outputs.ready == 'true'

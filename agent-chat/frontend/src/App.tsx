@@ -1,22 +1,41 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import Markdown from "react-markdown";
+import { useEffect, useRef, useState } from "react";
+import { FilePlus2, ListChecks, Menu, ScanSearch, Sparkles, SquarePen } from "lucide-react";
 import { getMcpInfo, resetChat, streamChat, type AgentEvent, type McpInfo } from "./api";
+import { Composer } from "./components/Composer";
+import { AgentTurn, UserMessage, type Step, type Turn } from "./components/Messages";
+import { Brand, Sidebar } from "./components/Sidebar";
 
-type Step =
-  | Exclude<AgentEvent, { type: "conversation" } | { type: "done" } | { type: "token" }>
-  | { type: "text"; text: string };
-interface Turn {
-  user: string;
-  steps: Step[];
-  pending: boolean;
-}
-
-const EXAMPLES = [
-  "What posts are on the blog?",
-  "Write a short draft post about how MCP works, by sachin",
-  "Publish the MCP post and show me its content",
-  "Which posts are still drafts?",
+const SUGGESTIONS = [
+  { icon: ListChecks, title: "Catch me up", prompt: "What posts are on the blog, and what is each one about?" },
+  { icon: FilePlus2, title: "Draft a post", prompt: "Write a short draft post explaining how MCP tools work, by sachin." },
+  { icon: ScanSearch, title: "Review a post", prompt: "Review the post “What is MCP?” for clarity and structure, and suggest concrete edits." },
+  { icon: SquarePen, title: "Publishing queue", prompt: "Which posts are still drafts? Summarize what each needs before publishing." },
 ];
+
+/** Apply one streamed agent event to the steps of the current turn. */
+function applyEvent(steps: Step[], event: AgentEvent): Step[] {
+  const last = steps[steps.length - 1];
+  switch (event.type) {
+    case "mcp_connected":
+      return [...steps, { type: "connected", tools: event.tools.length }];
+    case "token":
+      return last?.type === "text"
+        ? [...steps.slice(0, -1), { type: "text", text: last.text + event.text }]
+        : [...steps, { type: "text", text: event.text }];
+    case "tool_call":
+      return [...steps, { type: "tool", id: event.id, name: event.name, input: event.input, startedAt: performance.now() }];
+    case "tool_result":
+      return steps.map((s) =>
+        s.type === "tool" && s.id === event.id
+          ? { ...s, output: event.output, isError: event.is_error, finishedAt: performance.now() }
+          : s,
+      );
+    case "error":
+      return [...steps, { type: "error", message: event.message }];
+    default:
+      return steps;
+  }
+}
 
 export function App() {
   const [info, setInfo] = useState<McpInfo>();
@@ -24,16 +43,24 @@ export function App() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [conversationId, setConversationId] = useState<string>();
-  const bottom = useRef<HTMLDivElement>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
   const busy = turns.some((t) => t.pending);
 
   useEffect(() => {
     getMcpInfo().then(setInfo).catch((e) => setInfoError(e.message));
   }, []);
+
   useEffect(() => {
-    // Braces matter: an effect may only return a cleanup function, and scrollIntoView
-    // returns a Promise in recent browsers.
-    bottom.current?.scrollIntoView({ behavior: "smooth" });
+    document.title = turns[0] ? `${turns[0].user.slice(0, 40)} · Post Pilot Agent` : "Post Pilot Agent";
+  }, [turns]);
+
+  // Follow new output only while the reader is at the bottom.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
   }, [turns]);
 
   const updateLast = (fn: (t: Turn) => Turn) => setTurns((ts) => [...ts.slice(0, -1), fn(ts[ts.length - 1])]);
@@ -41,131 +68,101 @@ export function App() {
   async function send(text: string) {
     if (!text.trim() || busy) return;
     setInput("");
-    setTurns((ts) => [...ts, { user: text, steps: [], pending: true }]);
+    stickToBottom.current = true;
+    setTurns((ts) => [...ts, { user: text.trim(), steps: [], pending: true }]);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      for await (const event of streamChat(text, conversationId)) {
+      for await (const event of streamChat(text.trim(), conversationId, controller.signal)) {
         if (event.type === "conversation") setConversationId(event.id);
-        else if (event.type === "token") updateLast((t) => ({ ...t, steps: appendToken(t.steps, event.text) }));
-        else if (event.type !== "done") updateLast((t) => ({ ...t, steps: [...t.steps, event] }));
+        else updateLast((t) => ({ ...t, steps: applyEvent(t.steps, event) }));
       }
     } catch (e) {
-      updateLast((t) => ({ ...t, steps: [...t.steps, { type: "error", message: (e as Error).message }] }));
+      const stopped = (e as Error).name === "AbortError";
+      updateLast((t) => ({ ...t, steps: [...t.steps, stopped ? { type: "stopped" } : { type: "error", message: (e as Error).message }] }));
+    } finally {
+      abortRef.current = null;
+      updateLast((t) => ({ ...t, pending: false }));
     }
-    updateLast((t) => ({ ...t, pending: false }));
-  }
-
-  function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    send(input);
   }
 
   async function newChat() {
-    if (conversationId) await resetChat(conversationId);
+    if (conversationId) await resetChat(conversationId).catch(() => {});
     setConversationId(undefined);
     setTurns([]);
+    setSidebarOpen(false);
   }
 
   return (
-    <div className="layout">
-      <aside className="sidebar">
-        <h2>MCP server</h2>
-        {infoError && <p className="error">{infoError}</p>}
-        {info && (
-          <>
-            <code className="url">{info.server_url}</code>
-            <div className="desc">LLM: <code>{info.model}</code></div>
-            <h3>Tools ({info.tools.length})</h3>
-            <ul>
-              {info.tools.map((t) => (
-                <li key={t.name} title={t.description ?? ""}>
-                  <code>{t.name}</code>
-                  <div className="desc">{t.description?.split("\n")[0]}</div>
-                </li>
-              ))}
-            </ul>
-            <h3>Resources</h3>
-            <ul>
-              {[...info.resources, ...info.resource_templates].map((r) => (
-                <li key={r}><code>{r}</code></li>
-              ))}
-            </ul>
-            <h3>Prompts</h3>
-            <ul>
-              {info.prompts.map((p) => (
-                <li key={p.name}><code>{p.name}</code></li>
-              ))}
-            </ul>
-          </>
-        )}
-      </aside>
+    <div className="shell">
+      <Sidebar
+        info={info}
+        infoError={infoError}
+        busy={busy}
+        open={sidebarOpen}
+        onNewChat={newChat}
+        onClose={() => setSidebarOpen(false)}
+      />
+      {sidebarOpen && <div className="scrim" onClick={() => setSidebarOpen(false)} />}
 
-      <section className="chat">
-        <header>
-          <strong>LangGraph + MCP agent (OpenAI)</strong>
-          <button className="secondary" onClick={newChat} disabled={busy}>New chat</button>
+      <main className="main">
+        <header className="topbar">
+          <button className="icon-btn only-mobile" onClick={() => setSidebarOpen(true)} aria-label="Open panel">
+            <Menu size={19} />
+          </button>
+          <div className="only-mobile"><Brand /></div>
+          <h1 className="topbar-title hide-mobile">{turns[0]?.user ?? "New conversation"}</h1>
+          {info && <span className="model-chip"><Sparkles size={13} aria-hidden /> {info.model}</span>}
         </header>
 
-        <div className="messages">
-          {turns.length === 0 && (
-            <div className="examples">
-              <p>Ask the agent about the blog. Try:</p>
-              {EXAMPLES.map((ex) => (
-                <button key={ex} className="secondary" onClick={() => send(ex)}>{ex}</button>
+        <div
+          className="scroll"
+          ref={scrollRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          }}
+        >
+          {turns.length === 0 ? (
+            <section className="welcome">
+              <div className="welcome-mark" aria-hidden>
+                <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={56} height={56} />
+              </div>
+              <h2>What should we publish today?</h2>
+              <p>
+                I work on the blog through {info ? info.tools.length : "its"} MCP tools: I can find and read posts,
+                draft new ones, edit, publish or delete them. You'll see every tool call as it happens.
+              </p>
+              <div className="suggestions">
+                {SUGGESTIONS.map(({ icon: Icon, title, prompt }) => (
+                  <button key={title} className="suggestion" onClick={() => send(prompt)} disabled={busy}>
+                    <Icon size={18} aria-hidden />
+                    <strong>{title}</strong>
+                    <span>{prompt}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : (
+            <div className="thread">
+              {turns.map((turn, i) => (
+                <div key={i} className="turn">
+                  <UserMessage text={turn.user} />
+                  <AgentTurn turn={turn} />
+                </div>
               ))}
             </div>
           )}
-          {turns.map((turn, i) => (
-            <div key={i}>
-              <div className="bubble user">{turn.user}</div>
-              {turn.steps.map((step, j) => <StepView key={j} step={step} />)}
-              {turn.pending && turn.steps[turn.steps.length - 1]?.type !== "text" && <div className="muted">Working…</div>}
-            </div>
-          ))}
-          <div ref={bottom} />
         </div>
 
-        <form className="composer" onSubmit={onSubmit}>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about posts, or ask the agent to create / publish / delete one…"
-            disabled={busy}
-          />
-          <button type="submit" disabled={busy || !input.trim()}>Send</button>
-        </form>
-      </section>
+        <Composer
+          value={input}
+          busy={busy}
+          onChange={setInput}
+          onSend={() => send(input)}
+          onStop={() => abortRef.current?.abort()}
+        />
+      </main>
     </div>
   );
-}
-
-/** Append a streamed token to the current answer bubble, or start a new one after a tool step. */
-function appendToken(steps: Step[], text: string): Step[] {
-  const last = steps[steps.length - 1];
-  if (last?.type === "text") return [...steps.slice(0, -1), { type: "text", text: last.text + text }];
-  return [...steps, { type: "text", text }];
-}
-
-function StepView({ step }: { step: Step }) {
-  switch (step.type) {
-    case "mcp_connected":
-      return <div className="event">🔌 Connected to MCP server · discovered {step.tools.length} tools</div>;
-    case "tool_call":
-      return (
-        <details className="event tool">
-          <summary>🛠 tools/call <code>{step.name}</code></summary>
-          <pre>{JSON.stringify(step.input, null, 2)}</pre>
-        </details>
-      );
-    case "tool_result":
-      return (
-        <details className={`event tool ${step.is_error ? "is-error" : ""}`}>
-          <summary>{step.is_error ? "⚠️" : "✅"} result from <code>{step.name}</code></summary>
-          <pre>{typeof step.output === "string" ? step.output : JSON.stringify(step.output, null, 2)}</pre>
-        </details>
-      );
-    case "text":
-      return <div className="bubble assistant"><Markdown>{step.text}</Markdown></div>;
-    case "error":
-      return <div className="bubble error">{step.message}</div>;
-  }
 }

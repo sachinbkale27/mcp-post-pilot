@@ -1,11 +1,12 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8102";
+export const BLOG_URL = import.meta.env.VITE_BLOG_URL ?? "http://localhost:5173";
 
 /** Events streamed by the agent backend over SSE. `type` is the SSE event name. */
 export type AgentEvent =
   | { type: "conversation"; id: string }
   | { type: "mcp_connected"; server_url: string; tools: string[] }
   | { type: "token"; text: string }
-  | { type: "tool_call"; id: string; name: string; input: unknown }
+  | { type: "tool_call"; id: string; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; id: string; name: string; output: unknown; is_error: boolean }
   | { type: "error"; message: string }
   | { type: "done" };
@@ -21,7 +22,7 @@ export interface McpInfo {
 
 export async function getMcpInfo(): Promise<McpInfo> {
   const res = await fetch(`${API_URL}/mcp/info`);
-  if (!res.ok) throw new Error((await res.json()).detail ?? res.statusText);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);
   return res.json();
 }
 
@@ -31,13 +32,14 @@ export async function getMcpInfo(): Promise<McpInfo> {
  * The browser's EventSource only supports GET, so we read the SSE stream with fetch()
  * and parse the wire format ourselves: events are separated by a blank line, and each
  * has `event: <name>` and one or more `data: <json>` lines. Lines starting with ':' are
- * keep-alive comments.
+ * keep-alive comments. Aborting `signal` stops the stream (the Stop button).
  */
-export async function* streamChat(message: string, conversationId?: string): AsyncGenerator<AgentEvent> {
+export async function* streamChat(message: string, conversationId: string | undefined, signal: AbortSignal): AsyncGenerator<AgentEvent> {
   const res = await fetch(`${API_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify({ message, conversation_id: conversationId }),
+    signal,
   });
   if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`);
 
