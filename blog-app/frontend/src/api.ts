@@ -28,7 +28,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  list: (status?: PostStatus) => request<Post[]>(`/posts${status ? `?status=${status}` : ""}`),
+  list: (filters: { status?: PostStatus; q?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.status) params.set("status", filters.status);
+    if (filters.q) params.set("q", filters.q);
+    const query = params.toString();
+    return request<Post[]>(`/posts${query ? `?${query}` : ""}`);
+  },
   get: (id: number) => request<Post>(`/posts/${id}`),
   create: (body: PostInput) => request<Post>("/posts", { method: "POST", body: JSON.stringify(body) }),
   update: (id: number, body: Partial<PostInput>) =>
