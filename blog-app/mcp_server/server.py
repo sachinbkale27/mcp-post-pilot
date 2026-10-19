@@ -40,7 +40,8 @@ _load_settings()
 BLOG_API_URL = os.getenv("BLOG_API_URL", "http://127.0.0.1:8100")
 # Image generation (generate_image). OPENAI_IMAGE_API_URL only exists for testing against a stub.
 IMAGE_API_URL = (os.getenv("OPENAI_IMAGE_API_URL") or "https://api.openai.com/v1").rstrip("/")
-IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL") or "gpt-image-1"
+# gpt-image-2.5-flare: OpenAI's fast everyday model (gpt-image-2.5-sunburst is tuned for editing).
+IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL") or "gpt-image-2.5-flare"
 IMAGE_QUALITY = os.getenv("OPENAI_IMAGE_QUALITY") or "medium"
 # On AWS the blog API only accepts requests carrying the shared origin secret.
 ORIGIN_SECRET = os.getenv("ORIGIN_SECRET")
