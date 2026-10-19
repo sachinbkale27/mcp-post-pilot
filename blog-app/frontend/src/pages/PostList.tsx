@@ -48,11 +48,11 @@ export function PostList() {
               posts through the Model Context Protocol.
             </p>
             <div className="hero-actions">
-              <Link to="/new" className="btn btn-primary btn-lg">
-                <PenLine size={18} aria-hidden /> Start writing
+              <Link to="/new" className="btn btn-primary">
+                <PenLine size={16} aria-hidden /> Start writing
               </Link>
-              <a href={CHAT_URL} target="_blank" rel="noreferrer" className="btn btn-secondary btn-lg">
-                <Sparkles size={18} aria-hidden /> Draft with AI
+              <a href={CHAT_URL} target="_blank" rel="noreferrer" className="btn btn-secondary">
+                <Sparkles size={16} aria-hidden /> Draft with AI
               </a>
             </div>
           </div>

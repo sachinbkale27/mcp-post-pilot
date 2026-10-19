@@ -142,7 +142,7 @@ img { max-width: 100%; }
 
 /* --------------------------------------------------------------------- hero */
 .hero {
-  padding: 88px 0 56px;
+  padding: 44px 0 36px;
   border-bottom: 1px solid var(--border);
   background:
     radial-gradient(60% 120% at 85% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%),
@@ -150,15 +150,15 @@ img { max-width: 100%; }
     var(--bg);
 }
 .hero-chip {
-  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; margin-bottom: 22px;
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; margin-bottom: 16px;
   border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
   color: var(--accent-text); font-size: 13px; font-weight: 600; box-shadow: var(--shadow-sm);
 }
 .hero h1 {
-  margin: 0; max-width: 14ch;
-  font: 500 clamp(44px, 7vw, 76px)/1.02 var(--font-serif); letter-spacing: -0.03em;
+  margin: 0;
+  font: 500 clamp(32px, 4.2vw, 48px)/1.1 var(--font-serif); letter-spacing: -0.025em;
 }
-.hero p { max-width: 58ch; margin: 22px 0 32px; color: var(--text-2); font-size: 19px; line-height: 1.55; }
+.hero p { max-width: 62ch; margin: 12px 0 22px; color: var(--text-2); font-size: 17px; line-height: 1.55; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 
 /* ------------------------------------------------------------ list section */
@@ -329,8 +329,8 @@ img { max-width: 100%; }
   .header-inner { gap: 12px; }
   .main-nav, .search, .hide-sm { display: none; }
   .header-actions .btn { width: 38px; padding: 0; }
-  .hero { padding: 56px 0 40px; }
-  .hero p { font-size: 17px; }
+  .hero { padding: 32px 0 28px; }
+  .hero p { font-size: 16px; }
   .section { padding-top: 28px; }
   .section-head .tabs { margin-left: 0; }
   .grid { grid-template-columns: 1fr; gap: 16px; }
