@@ -45,6 +45,11 @@ IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL") or "gpt-image-2.5-flare"
 IMAGE_QUALITY = os.getenv("OPENAI_IMAGE_QUALITY") or "medium"
 # On AWS the blog API only accepts requests carrying the shared origin secret.
 ORIGIN_SECRET = os.getenv("ORIGIN_SECRET")
+# Public address of the blog UI. When set, posts returned by the tools include their page URL,
+# so clients link to the real page instead of guessing one.
+BLOG_PUBLIC_URL = os.getenv("BLOG_PUBLIC_URL", "").rstrip("/")
+# Generated images are stored in this format; WebP is a fraction of the size of PNG.
+IMAGE_FORMAT = os.getenv("OPENAI_IMAGE_FORMAT") or "webp"
 
 mcp = MCPServer(
     name="blog",
@@ -74,8 +79,15 @@ async def _api(method: str, path: str, **kwargs) -> dict | list | None:
     return resp.json() if resp.content else None
 
 
+def _with_url(post: dict) -> dict:
+    """Add the post's public page URL (when BLOG_PUBLIC_URL is configured)."""
+    if BLOG_PUBLIC_URL and isinstance(post, dict) and post.get("id") is not None:
+        return {**post, "url": f"{BLOG_PUBLIC_URL}/posts/{post['id']}"}
+    return post
+
+
 def _summary(post: dict) -> dict:
-    return {k: post.get(k) for k in ("id", "title", "author", "status", "category", "updated_at")}
+    return _with_url({k: post.get(k) for k in ("id", "title", "author", "status", "category", "updated_at")})
 
 
 # ---------------------------------------------------------------- tools
@@ -116,8 +128,8 @@ async def search_posts(query: str) -> list[dict]:
 
 @mcp.tool(annotations=READ_ONLY)
 async def get_post(post_id: int) -> dict:
-    """Get one post, including its full content."""
-    return await _api("GET", f"/posts/{post_id}")
+    """Get one post, including its full content and its public page URL."""
+    return _with_url(await _api("GET", f"/posts/{post_id}"))
 
 
 @mcp.tool()
@@ -138,7 +150,7 @@ async def create_post(
             Other images go in the content as ![alt text](url).
     """
     body = {"title": title, "content": content, "author": author, "cover_image_url": cover_image_url, "category": category}
-    return await _api("POST", "/posts", json=body)
+    return _with_url(await _api("POST", "/posts", json=body))
 
 
 @mcp.tool(annotations=ToolAnnotations(idempotentHint=True))
@@ -161,19 +173,19 @@ async def update_post(
     for key in ("cover_image_url", "category"):
         if body.get(key) == "":
             body[key] = None
-    return await _api("PATCH", f"/posts/{post_id}", json=body)
+    return _with_url(await _api("PATCH", f"/posts/{post_id}", json=body))
 
 
 @mcp.tool(annotations=ToolAnnotations(idempotentHint=True))
 async def publish_post(post_id: int) -> dict:
     """Publish a draft post so it appears on the public blog."""
-    return await _api("POST", f"/posts/{post_id}/publish")
+    return _with_url(await _api("POST", f"/posts/{post_id}/publish"))
 
 
 @mcp.tool(annotations=ToolAnnotations(idempotentHint=True))
 async def unpublish_post(post_id: int) -> dict:
     """Move a published post back to draft."""
-    return await _api("POST", f"/posts/{post_id}/unpublish")
+    return _with_url(await _api("POST", f"/posts/{post_id}/unpublish"))
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=True))
@@ -205,9 +217,16 @@ async def generate_image(
 
     # GPT Image models always return base64 image data.
     body = {"model": IMAGE_MODEL, "prompt": prompt, "n": 1, "size": size, "quality": IMAGE_QUALITY}
+    if IMAGE_FORMAT != "png":
+        # A 1536x1024 PNG is ~2.5 MB, slow to load on a post page; WebP/JPEG at 80% is ~10x smaller.
+        body |= {"output_format": IMAGE_FORMAT, "output_compression": 80}
 
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(f"{IMAGE_API_URL}/images/generations", headers={"Authorization": f"Bearer {key}"}, json=body)
+        if resp.status_code == 400 and "output_" in resp.text:
+            # A model that doesn't support choosing the format: fall back to its default (PNG)
+            body = {k: v for k, v in body.items() if not k.startswith("output_")}
+            resp = await client.post(f"{IMAGE_API_URL}/images/generations", headers={"Authorization": f"Bearer {key}"}, json=body)
     if resp.status_code >= 400:
         try:
             error = resp.json().get("error") or {}

@@ -100,7 +100,7 @@ info "Starting Blog MCP server"
 env_value() { grep -E "^$1=" "$ROOT/agent-chat/.env" | tail -1 | cut -d= -f2- || true; }
 export OPENAI_API_KEY="${OPENAI_API_KEY:-$(env_value OPENAI_API_KEY)}"
 export OPENAI_IMAGE_MODEL="${OPENAI_IMAGE_MODEL:-$(env_value OPENAI_IMAGE_MODEL)}"
-start blog-mcp blog-app .venv/bin/python mcp_server/server.py
+BLOG_PUBLIC_URL=http://localhost:5173 start blog-mcp blog-app .venv/bin/python mcp_server/server.py
 wait_for blog-mcp http://127.0.0.1:8101/mcp
 
 info "Starting Agent API"

@@ -97,6 +97,8 @@ jobs:
           LANGSMITH_TRACING: ${{ vars.LANGSMITH_TRACING || 'true' }}
           LANGSMITH_PROJECT: ${{ vars.LANGSMITH_PROJECT || 'mcp-blog-agent' }}
           LANGSMITH_ENDPOINT: ${{ vars.LANGSMITH_ENDPOINT || 'https://api.smith.langchain.com' }}
+          # Post page links in blog MCP tool results
+          BLOG_PUBLIC_URL: ${{ steps.stack.outputs.BlogUrl }}
         run: |
           put() {  # name, type
             if [ -n "${!1}" ]; then
@@ -112,6 +114,7 @@ jobs:
           put LANGSMITH_TRACING String
           put LANGSMITH_PROJECT String
           put LANGSMITH_ENDPOINT String
+          put BLOG_PUBLIC_URL String
 
       - name: Update Lambda functions
         if: steps.ready.outputs.ready == 'true'
