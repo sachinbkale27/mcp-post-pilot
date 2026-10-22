@@ -20,7 +20,24 @@ env:
   STACK_NAME: mcp-post-pilot
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Agent tests (supervisor, specialist registry)
+        working-directory: agent-chat
+        run: |
+          uv venv -q --python 3.13
+          uv pip install -q -r requirements.txt pytest pytest-asyncio
+          OPENAI_API_KEY=sk-test .venv/bin/python -m pytest -q
+      - name: Chat UI type check
+        working-directory: agent-chat/frontend
+        run: npm ci && npx tsc --noEmit -p .
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

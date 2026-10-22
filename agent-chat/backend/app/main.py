@@ -1,4 +1,4 @@
-"""Chat API for the MCP agent. Streams agent events to the UI as Server-Sent Events (SSE)."""
+"""Chat API for the multi-agent supervisor. Streams agent events to the UI as Server-Sent Events (SSE)."""
 
 import os
 import uuid
@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel, Field, field_validator
 
-from .agent import list_mcp_capabilities, reset_thread, run_turn
+from .agent import list_agents, reset_thread, run_turn
 from .origin import OriginSecretMiddleware
 
 app = FastAPI(title="MCP Agent Chat")
@@ -47,12 +47,13 @@ class ChatRequest(BaseModel):
     images: list[ChatImage] = Field(default_factory=list, max_length=4)
 
 
-@app.get("/mcp/info")
-async def mcp_info():
+@app.get("/agents")
+async def agents():
+    """Every specialist agent and what its MCP server offers; an offline server is reported, not raised."""
     try:
-        return await list_mcp_capabilities()
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Cannot reach MCP server: {exc}")
+        return await list_agents()
+    except Exception as exc:  # e.g. a broken agents.json
+        raise HTTPException(status_code=500, detail=f"Cannot load agents: {exc}")
 
 
 @app.post("/chat", response_class=EventSourceResponse)

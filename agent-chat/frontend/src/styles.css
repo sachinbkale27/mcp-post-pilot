@@ -364,3 +364,45 @@ button { font: inherit; color: inherit; }
   .capability-grid { grid-template-columns: 1fr; }
   .tool-summary { display: none; }
 }
+
+/* specialist agents: a delegation card in the thread, with the agent's tool calls nested inside */
+.agent-card { border: 1px solid var(--line-2); border-radius: 14px; background: color-mix(in srgb, var(--panel) 70%, transparent); overflow: hidden; }
+.agent-card.is-error { border-color: color-mix(in srgb, var(--danger) 55%, var(--line)); }
+.agent-head {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px;
+  border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer;
+}
+.agent-head:hover { background: var(--raised); }
+.agent-icon {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 7px;
+  color: var(--accent); background: var(--accent-soft);
+}
+.agent-title { flex: none; font-weight: 600; font-size: 13.5px; }
+.agent-task { flex: 1; min-width: 0; color: var(--text-2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-card.is-error .tool-state { color: var(--danger); }
+.agent-card .tool-state .spin { color: var(--accent); }
+.chevron.open { transform: rotate(90deg); }
+.agent-brief { padding: 0 14px 10px 46px; }
+.agent-brief p { margin: 0; color: var(--text-2); font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-tools { display: grid; gap: 8px; padding: 0 12px 12px 46px; }
+
+/* sidebar: one collapsible section per agent */
+.agent-panels { display: grid; gap: 8px; }
+.agent-panel { border: 1px solid var(--line); border-radius: 11px; background: var(--raised); }
+.agent-panel > summary {
+  display: flex; align-items: center; gap: 9px; padding: 9px 10px; cursor: pointer; list-style: none;
+}
+.agent-panel > summary::-webkit-details-marker { display: none; }
+.agent-panel-title { font-weight: 600; font-size: 13.5px; }
+.agent-panel[open] > summary { border-bottom: 1px solid var(--line); }
+.agent-panel > :not(summary) { margin-left: 10px; margin-right: 10px; }
+.agent-desc { margin-top: 10px; margin-bottom: 10px; color: var(--text-2); font-size: 12.5px; line-height: 1.5; }
+.agent-panel .facts { margin-bottom: 8px; }
+.agent-panel .tool-list { margin-bottom: 8px; }
+.agent-panel .chips { margin-bottom: 10px; }
+
+@media (max-width: 640px) {
+  .agent-brief { padding-left: 14px; }
+  .agent-tools { padding-left: 12px; }
+  .agent-task { display: none; }
+}

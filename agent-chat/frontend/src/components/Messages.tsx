@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, ChevronRight, CircleAlert, Copy, LoaderCircle, OctagonX, PlugZap } from "lucide-react";
+import { Bot, Check, ChevronRight, CircleAlert, Copy, LoaderCircle, OctagonX } from "lucide-react";
 import { formatDuration, resultImage, summarizeResult, toolMeta } from "../lib/tools";
 
 export type ToolStep = {
@@ -15,10 +15,22 @@ export type ToolStep = {
   finishedAt?: number;
 };
 
+/** One delegation from the supervisor to a specialist agent, with that agent's tool calls. */
+export type AgentStep = {
+  type: "agent";
+  id: string;
+  agent: string;
+  title: string;
+  task: string;
+  tools: ToolStep[];
+  isError?: boolean;
+  startedAt: number;
+  finishedAt?: number;
+};
+
 export type Step =
-  | { type: "connected"; tools: number }
   | { type: "text"; text: string }
-  | ToolStep
+  | AgentStep
   | { type: "error"; message: string }
   | { type: "stopped" };
 
@@ -95,6 +107,42 @@ function ToolCard({ step }: { step: ToolStep }) {
   );
 }
 
+function AgentCard({ step }: { step: AgentStep }) {
+  const [showTask, setShowTask] = useState(false);
+  const running = step.finishedAt === undefined;
+  return (
+    <div className={`agent-card agent-${step.agent}${step.isError ? " is-error" : ""}`}>
+      <button className="agent-head" onClick={() => setShowTask(!showTask)} aria-expanded={showTask}>
+        <span className="agent-icon"><Bot size={14} aria-hidden /></span>
+        <span className="agent-title">{step.title}</span>
+        <span className="agent-task">{step.task}</span>
+        <span className="tool-state">
+          {running ? (
+            <LoaderCircle size={14} className="spin" aria-label="Working" />
+          ) : step.isError ? (
+            <CircleAlert size={14} aria-label="Failed" />
+          ) : (
+            <Check size={14} aria-label="Done" />
+          )}
+          {!running && <span className="mono">{formatDuration(step.finishedAt! - step.startedAt)}</span>}
+        </span>
+        <ChevronRight size={14} className={showTask ? "chevron open" : "chevron"} aria-hidden />
+      </button>
+      {showTask && (
+        <div className="agent-brief">
+          <div className="tool-io-label">Task from the coordinator</div>
+          <p>{step.task}</p>
+        </div>
+      )}
+      {step.tools.length > 0 && (
+        <div className="agent-tools">
+          {step.tools.map((tool) => <ToolCard key={tool.id} step={tool} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -116,7 +164,8 @@ function CopyButton({ text }: { text: string }) {
 export function AgentTurn({ turn }: { turn: Turn }) {
   const last = turn.steps[turn.steps.length - 1];
   const answer = turn.steps.filter((s) => s.type === "text").map((s) => (s as { text: string }).text).join("\n\n");
-  const thinking = turn.pending && (!last || last.type === "connected" || (last.type === "tool" && last.finishedAt !== undefined));
+  // Waiting on the supervisor: nothing yet, or every agent it called has reported back
+  const thinking = turn.pending && (!last || (last.type === "agent" && turn.steps.every((s) => s.type !== "agent" || s.finishedAt !== undefined)));
 
   return (
     <div className="msg-agent">
@@ -126,14 +175,8 @@ export function AgentTurn({ turn }: { turn: Turn }) {
       <div className="agent-body">
         {turn.steps.map((step, i) => {
           switch (step.type) {
-            case "connected":
-              return (
-                <div key={i} className="trace-line">
-                  <PlugZap size={13} aria-hidden /> Connected to MCP server · {step.tools} tools available
-                </div>
-              );
-            case "tool":
-              return <ToolCard key={step.id} step={step} />;
+            case "agent":
+              return <AgentCard key={step.id} step={step} />;
             case "text":
               return (
                 <div key={i} className={turn.pending && step === last ? "answer streaming" : "answer"}>

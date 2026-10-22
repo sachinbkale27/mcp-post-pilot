@@ -3,7 +3,7 @@
 A blogging platform with an AI assistant that manages posts through the **Model Context Protocol (MCP)**.
 
 - **Blog**: React + TypeScript UI, FastAPI REST API, PostgreSQL, and an MCP server that exposes the blog as tools, resources and prompts.
-- **Agent chat**: a LangGraph agent (OpenAI) that discovers the blog's MCP tools at runtime and uses them to create, edit, publish and delete posts, streaming its answers over SSE.
+- **Agent chat**: a multi-agent LangGraph app (OpenAI). A supervisor hands tasks to specialist agents, each an MCP client of its own server: the **Blog agent** (this blog's MCP server) and the **Genetics agent** ([genetics MCP server](https://genapi.sachin-kale.com/mcp): ClinVar, gnomAD, NCBI Gene, PubMed). Answers and every delegation and tool call stream over SSE. New agents are added in `agents.json`.
 
 ```
 ┌──────────────────── Blog ─────────────────────────┐      ┌──────────────── Agent Chat ─────────────────┐
@@ -22,7 +22,8 @@ A blogging platform with an AI assistant that manages posts through the **Model 
 | `blog-app/mcp_server/server.py` | **MCP server**: wraps the REST API as MCP tools, resources and prompts |
 | `blog-app/scripts/try_mcp_client.py` | A 30-line MCP client: discover the server and call tools by hand |
 | `blog-app/frontend/` | React + TypeScript blog UI |
-| `agent-chat/backend/app/agent.py` | **MCP client + LangGraph agent**: discovers tools over MCP, gives them to the OpenAI model, executes calls |
+| `agent-chat/backend/app/agent.py` | **Supervisor**: a LangGraph agent whose tools are the specialist agents (`ask_blog`, `ask_genetics`, …) |
+| `agent-chat/backend/app/specialists/` | **Specialist agents**: `agents.json` registry and prompts; `runner.py` runs one agent as an MCP client of its server |
 | `agent-chat/backend/app/main.py` | Chat API that streams the agent's steps and LLM tokens as Server-Sent Events |
 | `agent-chat/frontend/` | React + TypeScript chat UI that shows every MCP tool call and result |
 
@@ -141,6 +142,36 @@ The agent can publish posts with pictures, in two ways:
 Image data never passes through MCP tool calls, only URLs: the UI (or the MCP server, for generated
 images) uploads, and the agent references. The blog API stores links to uploaded images in one
 canonical form, and the deploy never deletes `media/` from the bucket.
+
+## Multiple agents
+
+```
+user ─▶ Supervisor ─┬─ ask_blog(task)     ─▶ Blog agent     ⇄ blog MCP server
+                    ├─ ask_genetics(task) ─▶ Genetics agent ⇄ genetics MCP server
+                    └─ ask_<name>(task)   ─▶ …any agent listed in agents.json
+```
+
+- **Routing.** Each specialist is one tool of the supervisor, described by its `description`. The
+  supervisor calls independent agents in parallel and dependent ones in sequence ("research the
+  variant, then write a draft post about it"), then writes the answer from their reports.
+- **Isolation.** A specialist sees only its task and the user's latest message, and connects to its
+  MCP server only when it is called. A failing agent comes back as an error report the supervisor
+  relays; it doesn't end the turn.
+- **Safety.** Agent reports are information, not instructions. Specialists only publish, unpublish or
+  delete when the user's own message asks for it, so text from outside data (a paper's abstract, say)
+  can't make the Blog agent delete posts.
+- **Adding an agent.** Add an entry to `agent-chat/backend/app/specialists/agents.json` and a prompt file:
+
+  ```json
+  { "name": "labels", "title": "Labeling agent", "description": "Annotates images and exports COCO/YOLO datasets.",
+    "mcp_url": "${LABELS_MCP_URL}", "headers": { "authorization": "Bearer ${LABELS_TOKEN}" },
+    "prompt_file": "prompts/labels.md", "images": true }
+  ```
+
+  `${VAR}` and `${VAR:-default}` read the environment (Parameter Store on AWS); an agent whose URL
+  is empty is disabled. The sidebar (`GET /agents`) shows each agent's MCP server and tools.
+- **Events.** `agent_start` / `agent_end` wrap each delegation, and specialist `tool_call` / `tool_result`
+  events carry `agent` and `delegation`, so the UI nests them under the right agent.
 
 ## How it works
 

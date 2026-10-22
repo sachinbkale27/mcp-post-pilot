@@ -1,9 +1,9 @@
-import { BookText, FileCode2, MessageSquarePlus, PanelLeftClose, Server, SquareArrowOutUpRight } from "lucide-react";
-import { BLOG_URL, type McpInfo } from "../api";
+import { BookText, Bot, FileCode2, MessageSquarePlus, Network, PanelLeftClose, SquareArrowOutUpRight } from "lucide-react";
+import { BLOG_URL, type AgentInfo, type AgentsInfo } from "../api";
 import { toolMeta } from "../lib/tools";
 
 interface Props {
-  info?: McpInfo;
+  info?: AgentsInfo;
   infoError?: string;
   busy: boolean;
   open: boolean;
@@ -18,17 +18,72 @@ export function Brand() {
       <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={30} height={30} />
       <div>
         <div className="brand-name">Post Pilot <span>Agent</span></div>
-        <div className="brand-sub">MCP · LangGraph</div>
+        <div className="brand-sub">Multi-agent · MCP · LangGraph</div>
       </div>
     </div>
   );
 }
 
+function host(url: string) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+function AgentPanel({ agent, defaultOpen }: { agent: AgentInfo; defaultOpen: boolean }) {
+  const tools = agent.tools ?? [];
+  const extras = [...(agent.resources ?? []), ...(agent.resource_templates ?? [])];
+  return (
+    <details className="agent-panel" open={defaultOpen}>
+      <summary>
+        <span className="agent-icon"><Bot size={14} aria-hidden /></span>
+        <span className="agent-panel-title">{agent.title}</span>
+        <span className={`status status-${agent.online ? "online" : "offline"}`}>
+          <span className="status-dot" /> {agent.online ? `${tools.length} tools` : "Offline"}
+        </span>
+      </summary>
+      <p className="agent-desc">{agent.description}</p>
+      <dl className="facts">
+        <div><dt>MCP server</dt><dd className="mono" title={agent.server_url}>{host(agent.server_url)}</dd></div>
+      </dl>
+      {agent.error && <p className="panel-error">{agent.error}</p>}
+      {tools.length > 0 && (
+        <ul className="tool-list">
+          {tools.map((tool) => {
+            const meta = toolMeta(tool.name);
+            const Icon = meta.icon;
+            return (
+              <li key={tool.name} title={tool.description ?? undefined}>
+                <span className={`tool-icon kind-${meta.kind}`}><Icon size={14} aria-hidden /></span>
+                <span className="tool-name">{tool.name}</span>
+                <span className={`kind-tag kind-${meta.kind}`}>{meta.kind}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {(extras.length > 0 || (agent.prompts ?? []).length > 0) && (
+        <div className="chips">
+          {extras.map((r) => (
+            <span key={r} className="chip mono"><FileCode2 size={12} aria-hidden /> {r}</span>
+          ))}
+          {(agent.prompts ?? []).map((p) => (
+            <span key={p.name} className="chip mono" title={p.description ?? undefined}>{p.name}</span>
+          ))}
+        </div>
+      )}
+    </details>
+  );
+}
+
 export function Sidebar({ info, infoError, busy, open, onNewChat, onRetry, onClose }: Props) {
-  const status = infoError ? "offline" : info ? "online" : "connecting";
+  const online = info?.agents.filter((a) => a.online).length ?? 0;
+  const status = infoError ? "offline" : info ? (online === info.agents.length ? "online" : "partial") : "connecting";
 
   return (
-    <aside className={open ? "sidebar open" : "sidebar"} aria-label="Agent and MCP server">
+    <aside className={open ? "sidebar open" : "sidebar"} aria-label="Agents and MCP servers">
       <div className="sidebar-top">
         <Brand />
         <button className="icon-btn only-mobile" onClick={onClose} aria-label="Close panel">
@@ -42,9 +97,10 @@ export function Sidebar({ info, infoError, busy, open, onNewChat, onRetry, onClo
 
       <section className="panel">
         <div className="panel-head">
-          <Server size={14} aria-hidden /> MCP server
-          <span className={`status status-${status}`}>
-            <span className="status-dot" /> {status === "online" ? "Connected" : status === "offline" ? "Offline" : "Connecting"}
+          <Network size={14} aria-hidden /> Supervisor
+          <span className={`status status-${status === "partial" ? "offline" : status}`}>
+            <span className="status-dot" />{" "}
+            {status === "online" ? "Ready" : status === "partial" ? `${online}/${info!.agents.length} agents` : status === "offline" ? "Offline" : "Connecting"}
           </span>
         </div>
         {infoError && (
@@ -54,8 +110,8 @@ export function Sidebar({ info, infoError, busy, open, onNewChat, onRetry, onClo
         )}
         {info && (
           <dl className="facts">
-            <div><dt>Server</dt><dd>blog</dd></div>
             <div><dt>Model</dt><dd className="mono">{info.model}</dd></div>
+            <div><dt>Agents</dt><dd>{info.agents.length}</dd></div>
             <div><dt>Transport</dt><dd>Streamable HTTP</dd></div>
           </dl>
         )}
@@ -63,40 +119,13 @@ export function Sidebar({ info, infoError, busy, open, onNewChat, onRetry, onClo
 
       <section className="panel panel-grow">
         <div className="panel-head">
-          Tools <span className="count">{info?.tools.length ?? "–"}</span>
+          Agents <span className="count">{info?.agents.length ?? "–"}</span>
         </div>
-        <ul className="tool-list">
+        <div className="agent-panels">
           {info
-            ? info.tools.map((tool) => {
-                const meta = toolMeta(tool.name);
-                const Icon = meta.icon;
-                return (
-                  <li key={tool.name} title={tool.description ?? undefined}>
-                    <span className={`tool-icon kind-${meta.kind}`}><Icon size={14} aria-hidden /></span>
-                    <span className="tool-name">{tool.name}</span>
-                    <span className={`kind-tag kind-${meta.kind}`}>{meta.kind}</span>
-                  </li>
-                );
-              })
-            : Array.from({ length: 6 }, (_, i) => <li key={i}><span className="skeleton" style={{ width: `${55 + (i % 3) * 12}%` }} /></li>)}
-        </ul>
-
-        {info && (
-          <>
-            <div className="panel-head sub">Resources</div>
-            <div className="chips">
-              {[...info.resources, ...info.resource_templates].map((r) => (
-                <span key={r} className="chip mono"><FileCode2 size={12} aria-hidden /> {r}</span>
-              ))}
-            </div>
-            <div className="panel-head sub">Prompts</div>
-            <div className="chips">
-              {info.prompts.map((p) => (
-                <span key={p.name} className="chip mono" title={p.description ?? undefined}>{p.name}</span>
-              ))}
-            </div>
-          </>
-        )}
+            ? info.agents.map((agent, i) => <AgentPanel key={agent.name} agent={agent} defaultOpen={i === 0} />)
+            : Array.from({ length: 2 }, (_, i) => <div key={i} className="skeleton" style={{ height: 34 }} />)}
+        </div>
       </section>
 
       <a className="sidebar-link" href={BLOG_URL} target="_blank" rel="noreferrer">

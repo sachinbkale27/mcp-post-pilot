@@ -18,35 +18,51 @@ export async function uploadImage(blob: Blob): Promise<string> {
   return body.url;
 }
 
-/** Events streamed by the agent backend over SSE. `type` is the SSE event name. */
+/**
+ * Events streamed by the agent backend over SSE. `type` is the SSE event name.
+ * agent_start/agent_end wrap each delegation from the supervisor to a specialist agent; the
+ * specialist's tool calls carry `agent` and `delegation` (the agent_start id) to nest under it.
+ */
 export type AgentEvent =
   | { type: "conversation"; id: string }
-  | { type: "mcp_connected"; server_url: string; tools: string[] }
+  | { type: "agents"; agents: { name: string; title: string }[] }
   | { type: "token"; text: string }
-  | { type: "tool_call"; id: string; name: string; input: Record<string, unknown> }
-  | { type: "tool_result"; id: string; name: string; output: unknown; is_error: boolean }
+  | { type: "agent_start"; id: string; agent: string; title: string; task: string }
+  | { type: "agent_end"; id: string; agent: string; is_error: boolean }
+  | { type: "tool_call"; id: string; name: string; input: Record<string, unknown>; agent: string; delegation: string }
+  | { type: "tool_result"; id: string; name: string; output: unknown; is_error: boolean; agent: string; delegation: string }
   | { type: "error"; message: string }
   | { type: "done" };
 
-export interface McpInfo {
+/** One specialist agent and what its MCP server advertises. */
+export interface AgentInfo {
+  name: string;
+  title: string;
+  description: string;
   server_url: string;
+  online: boolean;
+  error?: string;
+  tools?: { name: string; description: string | null; input_schema: unknown }[];
+  resources?: string[];
+  resource_templates?: string[];
+  prompts?: { name: string; description: string | null }[];
+}
+
+export interface AgentsInfo {
   model: string;
-  tools: { name: string; description: string | null; input_schema: unknown }[];
-  resources: string[];
-  resource_templates: string[];
-  prompts: { name: string; description: string | null }[];
+  agents: AgentInfo[];
 }
 
 /**
- * What the MCP server offers. Retries with backoff: on serverless the first request after a
- * deploy or an idle period can fail or be slow while the Lambdas cold-start.
+ * The configured agents and their MCP servers. Retries with backoff: on serverless the first
+ * request after a deploy or an idle period can fail or be slow while the Lambdas cold-start.
  */
-export async function getMcpInfo(attempts = 4): Promise<McpInfo> {
+export async function getAgents(attempts = 4): Promise<AgentsInfo> {
   let lastError: Error = new Error("Cannot reach the agent");
   for (let i = 0; i < attempts; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, 1500 * 2 ** (i - 1)));
     try {
-      const res = await fetch(`${API_URL}/mcp/info`);
+      const res = await fetch(`${API_URL}/agents`);
       if (res.ok) return res.json();
       lastError = new Error((await res.json().catch(() => ({}))).detail ?? `${res.status} ${res.statusText}`);
     } catch (e) {

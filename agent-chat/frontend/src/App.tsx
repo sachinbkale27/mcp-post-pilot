@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { FilePlus2, ImagePlus, ListChecks, Menu, ScanSearch, Sparkles, SquarePen, WandSparkles } from "lucide-react";
-import { BLOG_URL, getMcpInfo, resetChat, streamChat, uploadImage, type AgentEvent, type McpInfo } from "./api";
+import { Dna, FilePlus2, ImagePlus, ListChecks, Menu, Microscope, Sparkles, WandSparkles } from "lucide-react";
+import { BLOG_URL, getAgents, resetChat, streamChat, uploadImage, type AgentEvent, type AgentsInfo } from "./api";
 import { Composer, MAX_ATTACHMENTS, type Attachment } from "./components/Composer";
 import { prepareImage } from "./lib/images";
-import { AgentTurn, UserMessage, type Step, type Turn } from "./components/Messages";
+import { AgentTurn, UserMessage, type AgentStep, type Step, type Turn } from "./components/Messages";
 import { Brand, Sidebar } from "./components/Sidebar";
 
 const SUGGESTIONS = [
   { icon: ListChecks, title: "Catch me up", prompt: "What posts are on the blog, and what is each one about?" },
+  { icon: Microscope, title: "Check a variant", prompt: "Is BRCA1 c.68_69del pathogenic, how common is it, and what is the strongest evidence?" },
+  {
+    icon: Dna, title: "Research, then write",
+    prompt: "Research the CFTR F508del variant (ClinVar classification, what CFTR does, one recent paper on CFTR modulators), then write a short draft blog post about it with the sources, by sachin.",
+  },
   { icon: FilePlus2, title: "Draft a post", prompt: "Write a short draft post explaining how MCP tools work, by sachin." },
-  { icon: ScanSearch, title: "Review a post", prompt: "Review the post “What is MCP?” for clarity and structure, and suggest concrete edits." },
-  { icon: SquarePen, title: "Publishing queue", prompt: "Which posts are still drafts? Summarize what each needs before publishing." },
 ];
 
 const IMAGE_ONLY_PROMPT = "Here are some images.";
@@ -30,24 +33,38 @@ const IMAGE_CAPABILITIES = [
   },
 ];
 
-/** Apply one streamed agent event to the steps of the current turn. */
+/** Apply a change to the delegation (agent step) with this id. */
+function updateAgent(steps: Step[], id: string, fn: (s: AgentStep) => AgentStep): Step[] {
+  return steps.map((s) => (s.type === "agent" && s.id === id ? fn(s) : s));
+}
+
+/** Apply one streamed event to the steps of the current turn. */
 function applyEvent(steps: Step[], event: AgentEvent): Step[] {
   const last = steps[steps.length - 1];
   switch (event.type) {
-    case "mcp_connected":
-      return [...steps, { type: "connected", tools: event.tools.length }];
     case "token":
       return last?.type === "text"
         ? [...steps.slice(0, -1), { type: "text", text: last.text + event.text }]
         : [...steps, { type: "text", text: event.text }];
+    case "agent_start":
+      return [
+        ...steps,
+        { type: "agent", id: event.id, agent: event.agent, title: event.title, task: event.task, tools: [], startedAt: performance.now() },
+      ];
+    case "agent_end":
+      return updateAgent(steps, event.id, (s) => ({ ...s, isError: event.is_error, finishedAt: performance.now() }));
     case "tool_call":
-      return [...steps, { type: "tool", id: event.id, name: event.name, input: event.input, startedAt: performance.now() }];
+      return updateAgent(steps, event.delegation, (s) => ({
+        ...s,
+        tools: [...s.tools, { type: "tool", id: event.id, name: event.name, input: event.input, startedAt: performance.now() }],
+      }));
     case "tool_result":
-      return steps.map((s) =>
-        s.type === "tool" && s.id === event.id
-          ? { ...s, output: event.output, isError: event.is_error, finishedAt: performance.now() }
-          : s,
-      );
+      return updateAgent(steps, event.delegation, (s) => ({
+        ...s,
+        tools: s.tools.map((t) =>
+          t.id === event.id ? { ...t, output: event.output, isError: event.is_error, finishedAt: performance.now() } : t,
+        ),
+      }));
     case "error":
       return [...steps, { type: "error", message: event.message }];
     default:
@@ -56,7 +73,7 @@ function applyEvent(steps: Step[], event: AgentEvent): Step[] {
 }
 
 export function App() {
-  const [info, setInfo] = useState<McpInfo>();
+  const [info, setInfo] = useState<AgentsInfo>();
   const [infoError, setInfoError] = useState<string>();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
@@ -70,7 +87,7 @@ export function App() {
 
   const loadInfo = () => {
     setInfoError(undefined);
-    getMcpInfo().then(setInfo).catch((e) => setInfoError(e.message));
+    getAgents().then(setInfo).catch((e) => setInfoError(e.message));
   };
   useEffect(loadInfo, []);
 
@@ -176,12 +193,13 @@ export function App() {
               <div className="welcome-mark" aria-hidden>
                 <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={56} height={56} />
               </div>
-              <h2>What should we publish today?</h2>
+              <h2>What should we work on today?</h2>
               <p>
-                I work on the blog{" "}
-                <a href={BLOG_URL} target="_blank" rel="noreferrer">Post Pilot</a>{" "}
-                through {info ? info.tools.length : "its"} MCP tools: I can find and read posts,
-                draft new ones, edit, publish or delete them. You'll see every tool call as it happens.
+                I coordinate a team of specialist agents, each with its own MCP server: the Blog agent
+                works on <a href={BLOG_URL} target="_blank" rel="noreferrer">Post Pilot</a> (find, draft, edit,
+                publish posts), and the Genetics agent researches ClinVar, gnomAD, NCBI Gene and PubMed.
+                I hand each part of your request to the right agent, combine their results, and you see
+                every delegation and tool call as it happens.
               </p>
               <div className="suggestions">
                 {SUGGESTIONS.map(({ icon: Icon, title, prompt }) => (

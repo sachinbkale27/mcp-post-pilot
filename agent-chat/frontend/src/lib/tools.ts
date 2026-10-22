@@ -1,6 +1,7 @@
 /** How agent tool calls are presented: kind, icon and plain-language labels. */
 import {
-  BookOpen, FilePen, FilePlus2, FileSearch, List, type LucideIcon, Send, Tags, Trash2, Undo2, WandSparkles, Wrench,
+  BookOpen, ChartColumn, Dna, FilePen, FilePlus2, FileSearch, FileText, Library, List, type LucideIcon, Microscope, Send,
+  Tags, Trash2, Undo2, WandSparkles, Wrench,
 } from "lucide-react";
 
 export type ToolKind = "read" | "write" | "destructive";
@@ -44,6 +45,29 @@ const TOOLS: Record<string, ToolMeta> = {
     running: () => "Generating an image",
     done: () => "Generated an image",
   },
+  // genetics MCP server
+  search_clinvar: {
+    kind: "read", icon: Microscope,
+    running: (a) => `Searching ClinVar for ${[a.gene, a.query].filter(Boolean).join(" ")}`,
+    done: (a) => `Searched ClinVar for ${[a.gene, a.query].filter(Boolean).join(" ")}`,
+  },
+  variant_frequencies: {
+    kind: "read", icon: ChartColumn,
+    running: (a) => `Looking up gnomAD frequencies of ${a.rsid}`,
+    done: (a) => `Looked up gnomAD frequencies of ${a.rsid}`,
+  },
+  gene_info: { kind: "read", icon: Dna, running: (a) => `Reading about ${a.symbol}`, done: (a) => `Read about ${a.symbol}` },
+  search_pubmed: {
+    kind: "read", icon: Library,
+    running: (a) => `Searching PubMed for ${quoted(a.query)}`,
+    done: (a) => `Searched PubMed for ${quoted(a.query)}`,
+  },
+  get_pubmed_abstract: {
+    kind: "read", icon: FileText,
+    running: (a) => `Reading PMID ${a.pmid}`,
+    done: (a) => `Read PMID ${a.pmid}`,
+  },
+  analyze_sequence: { kind: "read", icon: Dna, running: () => "Analyzing a sequence", done: () => "Analyzed a sequence" },
 };
 
 /** The /media/... image URL in a tool result, if any (generate_image returns one). */
@@ -69,6 +93,8 @@ export function summarizeResult(output: unknown): string | undefined {
   if (value && typeof value === "object") {
     const o = value as Record<string, unknown>;
     if (typeof o.title === "string") return o.status ? `${o.title} · ${o.status}` : o.title;
+    if (typeof o.symbol === "string" && typeof o.location === "string") return `${o.symbol} · ${o.location}`;
+    if (typeof o.gc_percent === "number") return `${o.length} bases · ${o.gc_percent}% GC`;
     if (resultImage(o)) return `${o.size ?? "image"} · ${o.model ?? "AI"}`;
   }
   if (typeof value === "string") return value.length > 60 ? value.slice(0, 59) + "…" : value;
