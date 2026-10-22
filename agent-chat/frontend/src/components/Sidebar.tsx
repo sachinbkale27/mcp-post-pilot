@@ -46,7 +46,7 @@ function AgentPanel({ agent, defaultOpen }: { agent: AgentInfo; defaultOpen: boo
       </summary>
       <p className="agent-desc">{agent.description}</p>
       <dl className="facts">
-        <div><dt>MCP server</dt><dd className="mono" title={agent.server_url}>{host(agent.server_url)}</dd></div>
+        <div><dt>Server</dt><dd className="mono" title={agent.server_url}>{host(agent.server_url)}</dd></div>
       </dl>
       {agent.error && <p className="panel-error">{agent.error}</p>}
       {tools.length > 0 && (
@@ -67,10 +67,10 @@ function AgentPanel({ agent, defaultOpen }: { agent: AgentInfo; defaultOpen: boo
       {(extras.length > 0 || (agent.prompts ?? []).length > 0) && (
         <div className="chips">
           {extras.map((r) => (
-            <span key={r} className="chip mono"><FileCode2 size={12} aria-hidden /> {r}</span>
+            <span key={r} className="chip mono" title={r}><FileCode2 size={12} aria-hidden /> <span className="chip-text">{r}</span></span>
           ))}
           {(agent.prompts ?? []).map((p) => (
-            <span key={p.name} className="chip mono" title={p.description ?? undefined}>{p.name}</span>
+            <span key={p.name} className="chip mono" title={p.description ?? undefined}><span className="chip-text">{p.name}</span></span>
           ))}
         </div>
       )}
