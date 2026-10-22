@@ -139,7 +139,38 @@ def test_registry_rejects_bad_names_and_duplicates(tmp_path: Path):
         parse_agents([{**entry, "name": "a"}, {**entry, "name": "a"}], tmp_path)
 
 
-def test_shipped_agents_json_is_valid():
+def test_shipped_agents_json_is_valid(monkeypatch):
     path = Path(agent.__file__).parent / "specialists" / "agents.json"
-    names = [a.name for a in parse_agents(json.loads(path.read_text()), path.parent)]
-    assert names == ["blog", "genetics"]
+    entries = json.loads(path.read_text())
+    monkeypatch.delenv("LABELS_MCP_URL", raising=False)
+    monkeypatch.delenv("LABELS_MCP_TOKEN", raising=False)
+    assert [a.name for a in parse_agents(entries, path.parent)] == ["blog", "genetics"]  # labels not provisioned
+
+    monkeypatch.setenv("LABELS_MCP_URL", "https://labels.test/mcp")
+    monkeypatch.setenv("LABELS_MCP_TOKEN", "tok")
+    labels = parse_agents(entries, path.parent)[-1]
+    assert (labels.name, labels.headers, labels.attachment_base_url) == (
+        "labels", {"authorization": "Bearer tok"}, "https://blog-app.sachin-kale.com"
+    )
+
+
+def test_header_with_only_an_unset_variable_is_dropped(tmp_path: Path, monkeypatch):
+    (tmp_path / "p.md").write_text("x")
+    monkeypatch.delenv("NO_TOKEN", raising=False)
+    [spec] = parse_agents(
+        [{"name": "a", "description": "d", "mcp_url": "http://x/mcp", "prompt_file": "p.md",
+          "headers": {"authorization": "Bearer ${NO_TOKEN}"}}],
+        tmp_path,
+    )
+    assert spec.headers == {}
+
+
+def test_attachments_get_absolute_urls_for_agents_that_download_them():
+    from app.specialists.runner import task_message
+
+    spec = AgentSpec(name="labels", title="L", description="d", mcp_url="u", prompt="p", images=True,
+                     attachment_base_url="https://blog.test")
+    message = task_message(spec, "upload it", "label this", [{"url": "/media/a.png", "data_url": "data:image/png;base64,x"}])
+    assert "https://blog.test/media/a.png" in message.content[0]["text"]
+    assert message.content[1]["image_url"]["url"] == "data:image/png;base64,x"
+    assert "blog.test" not in task_message(BLOG, "t", "u", [{"url": "/media/a.png", "data_url": "d"}]).content

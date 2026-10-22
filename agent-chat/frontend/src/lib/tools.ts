@@ -1,7 +1,7 @@
 /** How agent tool calls are presented: kind, icon and plain-language labels. */
 import {
-  BookOpen, ChartColumn, Dna, FilePen, FilePlus2, FileSearch, FileText, Library, List, type LucideIcon, Microscope, Send,
-  Tags, Trash2, Undo2, WandSparkles, Wrench,
+  BookOpen, ChartColumn, Dna, Eraser, FileDown, FilePen, FilePlus2, FileSearch, FileText, ImageUp, Images, Library, List,
+  type LucideIcon, Microscope, PenTool, Replace, Send, Tags, Trash2, Undo2, WandSparkles, Wrench,
 } from "lucide-react";
 
 export type ToolKind = "read" | "write" | "destructive";
@@ -68,6 +68,28 @@ const TOOLS: Record<string, ToolMeta> = {
     done: (a) => `Read PMID ${a.pmid}`,
   },
   analyze_sequence: { kind: "read", icon: Dna, running: () => "Analyzing a sequence", done: () => "Analyzed a sequence" },
+  // label-image MCP server
+  list_images: {
+    kind: "read", icon: Images,
+    running: (a) => `Listing images${a.category ? ` in ${a.category}` : ""}`,
+    done: (a) => `Listed images${a.category ? ` in ${a.category}` : ""}`,
+  },
+  get_image: { kind: "read", icon: BookOpen, running: () => "Reading an image", done: () => "Read an image" },
+  update_image_metadata: { kind: "write", icon: FilePen, running: () => "Updating image details", done: () => "Updated image details" },
+  upload_image_from_url: { kind: "write", icon: ImageUp, running: () => "Uploading an image", done: () => "Uploaded an image" },
+  upload_image: { kind: "write", icon: ImageUp, running: () => "Uploading an image", done: () => "Uploaded an image" },
+  add_annotations: {
+    kind: "write", icon: PenTool,
+    running: (a) => `Adding ${Array.isArray(a.annotations) ? a.annotations.length : ""} annotations`,
+    done: (a) => `Added ${Array.isArray(a.annotations) ? a.annotations.length : ""} annotations`,
+  },
+  replace_annotations: { kind: "destructive", icon: Replace, running: () => "Replacing annotations", done: () => "Replaced annotations" },
+  remove_annotations: { kind: "destructive", icon: Eraser, running: () => "Removing annotations", done: () => "Removed annotations" },
+  export_annotations: {
+    kind: "read", icon: FileDown,
+    running: (a) => `Exporting ${String(a.format ?? "coco").toUpperCase()}`,
+    done: (a) => `Exported ${String(a.format ?? "coco").toUpperCase()}`,
+  },
 };
 
 /** The /media/... image URL in a tool result, if any (generate_image returns one). */

@@ -11,6 +11,9 @@ agents.json (path overridable with AGENTS_CONFIG); adding an agent means adding 
     headers      extra HTTP headers for its MCP server, e.g. a shared secret; empty values are dropped
     prompt_file  its instructions, relative to agents.json
     images       whether it sees images the user attaches (default false)
+    attachment_base_url
+                 base URL for attachment paths (/media/...), for agents whose MCP server has to
+                 download attached images itself
 """
 
 import json
@@ -38,6 +41,7 @@ class AgentSpec:
     prompt: str
     headers: dict[str, str] = field(default_factory=dict)
     images: bool = False
+    attachment_base_url: str = ""
 
     @property
     def tool_name(self) -> str:
@@ -56,6 +60,8 @@ def parse_agents(entries: list[dict], base_dir: Path) -> tuple[AgentSpec, ...]:
         if not url:
             continue
         headers = {key: _expand(value) for key, value in entry.get("headers", {}).items()}
+        # A header that only had an unset variable in it (e.g. "Bearer ") counts as empty
+        headers = {key: value for key, value in headers.items() if value.split(" ")[-1]}
         specs.append(
             AgentSpec(
                 name=name,
@@ -65,6 +71,7 @@ def parse_agents(entries: list[dict], base_dir: Path) -> tuple[AgentSpec, ...]:
                 prompt=(base_dir / entry["prompt_file"]).read_text().strip(),
                 headers={key: value for key, value in headers.items() if value},
                 images=bool(entry.get("images", False)),
+                attachment_base_url=_expand(entry.get("attachment_base_url", "")).rstrip("/"),
             )
         )
     if not specs:

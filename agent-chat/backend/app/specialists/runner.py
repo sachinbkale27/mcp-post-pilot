@@ -101,7 +101,13 @@ def task_message(spec: AgentSpec, task: str, user_text: str, images: list[dict[s
     text = f"Task from the coordinating assistant:\n{task}\n\nThe user's latest message, for context:\n{user_text}"
     if not (spec.images and images):
         return HumanMessage(text)
-    listing = "\n".join(f"- {img['url']}" + (f" ({img['name']})" if img.get("name") else "") for img in images)
+    # Agents whose MCP server downloads attachments itself need absolute URLs
+    base = spec.attachment_base_url
+    listing = "\n".join(
+        f"- {base + img['url'] if base and img['url'].startswith('/') else img['url']}"
+        + (f" ({img['name']})" if img.get("name") else "")
+        for img in images
+    )
     parts: list[dict[str, Any]] = [{"type": "text", "text": f"{text}\n\n[Attached image(s), uploaded at:\n{listing}]"}]
     parts += [{"type": "image_url", "image_url": {"url": img["data_url"]}} for img in images]
     return HumanMessage(parts)

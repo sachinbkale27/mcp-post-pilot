@@ -197,7 +197,15 @@ export function App() {
               <p>
                 I coordinate a team of specialist agents, each with its own MCP server: the Blog agent
                 works on <a href={BLOG_URL} target="_blank" rel="noreferrer">Post Pilot</a> (find, draft, edit,
-                publish posts), and the Genetics agent researches ClinVar, gnomAD, NCBI Gene and PubMed.
+                publish posts), the Genetics agent researches ClinVar, gnomAD, NCBI Gene and PubMed
+                {info?.agents.some((a) => a.name === "labels") ? (
+                  <>
+                    , and the Labeling agent annotates your images in{" "}
+                    <a href="https://labels.sachin-kale.com" target="_blank" rel="noreferrer">Image Label</a> and exports
+                    COCO or YOLO training data
+                  </>
+                ) : null}
+                .
                 I hand each part of your request to the right agent, combine their results, and you see
                 every delegation and tool call as it happens.
               </p>

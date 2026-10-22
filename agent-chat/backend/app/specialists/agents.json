@@ -4,7 +4,9 @@
     "title": "Blog agent",
     "description": "Manages the Post Pilot blog: finds, reads, drafts, edits, publishes, unpublishes and deletes posts, sets categories, and adds attached or AI-generated images.",
     "mcp_url": "${MCP_SERVER_URL:-http://127.0.0.1:8101/mcp}",
-    "headers": { "x-origin-secret": "${ORIGIN_SECRET}" },
+    "headers": {
+      "x-origin-secret": "${ORIGIN_SECRET}"
+    },
     "prompt_file": "prompts/blog.md",
     "images": true
   },
@@ -14,5 +16,17 @@
     "description": "Researches genetics with public databases: ClinVar classifications of variants, gnomAD population frequencies, what genes do (NCBI Gene), PubMed literature and DNA sequence analysis. Returns findings with source links.",
     "mcp_url": "${GENETICS_MCP_URL:-https://genapi.sachin-kale.com/mcp}",
     "prompt_file": "prompts/genetics.md"
+  },
+  {
+    "name": "labels",
+    "title": "Labeling agent",
+    "description": "Works in Image Label, an image annotation tool: uploads images (including ones attached in this chat), adds or cleans up annotations (polygons, circles, rectangles, pins, arrows) and exports COCO or YOLO training data. Its annotations are drafts for a person to review.",
+    "mcp_url": "${LABELS_MCP_URL}",
+    "headers": {
+      "authorization": "Bearer ${LABELS_MCP_TOKEN}"
+    },
+    "prompt_file": "prompts/labels.md",
+    "images": true,
+    "attachment_base_url": "${BLOG_PUBLIC_URL:-https://blog-app.sachin-kale.com}"
   }
 ]
