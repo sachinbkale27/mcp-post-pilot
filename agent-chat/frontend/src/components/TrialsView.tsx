@@ -7,6 +7,7 @@ import { applyEvent } from "../lib/events";
 import { filedTrials } from "../lib/tools";
 import { AgentCard, type Step } from "./Messages";
 import { TrialCards } from "./TrialCards";
+import { TrialsFaq } from "./TrialsFaq";
 import { type GuideStep, TrialsGuide } from "./TrialsGuide";
 
 type Status = "recruiting" | "open" | "all";
@@ -167,6 +168,7 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
             <CircleHelp size={14} aria-hidden /> {showGuide ? "Hide the guide" : "How to use this page"}
           </button>
         )}
+        <TrialsFaq />
       </header>
 
       {!available && (
