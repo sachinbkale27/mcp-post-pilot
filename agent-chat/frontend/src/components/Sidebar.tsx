@@ -102,7 +102,7 @@ export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, 
 
       <nav className="view-nav" aria-label="Views">
         <button className={view === "chat" ? "active" : undefined} onClick={() => onViewChange("chat")} aria-current={view === "chat" ? "page" : undefined}>
-          <MessagesSquare size={16} aria-hidden /> Chat
+          <MessagesSquare size={16} aria-hidden /> Agent Chat
         </button>
         {labelingAvailable && (
           <button className={view === "label" ? "active" : undefined} onClick={() => onViewChange("label")} aria-current={view === "label" ? "page" : undefined}>
