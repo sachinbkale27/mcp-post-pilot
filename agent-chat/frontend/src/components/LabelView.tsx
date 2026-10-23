@@ -232,7 +232,13 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
   async function askAI() {
     // Opened now, while the click still counts as the user's: a window opened after the request would be blocked
     const tab = window.open("", "_blank");
-    if (tab) tab.opener = null; // the other site gets no handle on this page
+    if (tab) {
+      tab.opener = null; // the other site gets no handle on this page
+      tab.document.title = "Ask AI";
+      tab.document.body.innerHTML =
+        '<p style="font:16px system-ui,sans-serif;color:#555;margin:40vh auto 0;text-align:center">' +
+        "Preparing your results for the genetics assistant…</p>";
+    }
     const annotations = run?.result?.annotations ?? [];
     const counts = new Map<string, number>();
     for (const a of annotations) {
@@ -554,7 +560,8 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
   );
 }
 
-function LabelResultView({ result, image, name, onAskAI }: { result: LabelResult; image: string; name: string; onAskAI: () => void }) {
+function LabelResultView({ result, image, name, onAskAI }: { result: LabelResult; image: string; name: string; onAskAI: () => Promise<void> }) {
+  const [asking, setAsking] = useState(false);
   const nuclei = result.nuclei_summary;
   const exportable = result.annotations.filter((a) => a.type === "polygon" || a.type === "circle").length;
   const base = name.replace(/\.[^.]+$/, "") || "image";
@@ -589,8 +596,14 @@ function LabelResultView({ result, image, name, onAskAI }: { result: LabelResult
 
       <div className="ask-ai-row">
         <span>Questions about these results?</span>
-        <button className="ask-ai" onClick={onAskAI} title="Opens the genetics assistant with these results">
-          <Sparkles size={16} aria-hidden /> Ask AI <SquareArrowOutUpRight size={13} aria-hidden />
+        <button
+          className="ask-ai"
+          onClick={() => { setAsking(true); onAskAI().finally(() => setAsking(false)); }}
+          disabled={asking}
+          title="Opens the genetics assistant with these results"
+        >
+          {asking ? <LoaderCircle size={16} className="spin" aria-hidden /> : <Sparkles size={16} aria-hidden />}
+          {asking ? "Opening…" : "Ask AI"} <SquareArrowOutUpRight size={13} aria-hidden />
         </button>
       </div>
 
