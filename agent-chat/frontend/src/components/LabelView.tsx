@@ -388,30 +388,6 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
             ))}
           </div>
 
-          <div className="label-actions">
-            {busy ? (
-              <button className="label-run" onClick={() => abortRef.current?.abort()}>
-                <Square size={14} aria-hidden /> Stop
-              </button>
-            ) : (
-              <button className="label-run" onClick={() => start()} disabled={!canRun}>
-                <ScanSearch size={16} aria-hidden /> Annotate Image
-              </button>
-            )}
-            {diagnosis?.pending ? (
-              <button className="label-secondary" onClick={() => diagnoseAbort.current?.abort()}>
-                <Square size={14} aria-hidden /> Stop
-              </button>
-            ) : (
-              <button className="label-secondary" onClick={diagnose} disabled={upload?.status !== "ready"} title="AI interpretation of the image (research and education, not a medical diagnosis)">
-                <Stethoscope size={16} aria-hidden /> Diagnose
-              </button>
-            )}
-            {(run || diagnosis) && !busy && !diagnosis?.pending && (
-              <button className="link-btn" onClick={reset}><RotateCcw size={13} aria-hidden /> Start over</button>
-            )}
-          </div>
-
           <div className="histology-tools">
             <span className="label-source-title"><Microscope size={14} aria-hidden /> Histology tools <em>(H&E-stained tissue)</em></span>
             <div className="histology-buttons">
@@ -437,6 +413,30 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
                 Showing the stain-normalized copy (saved in Image Label as a new image).{" "}
                 <button className="link-btn" onClick={restoreOriginal} disabled={busy}><Undo2 size={13} aria-hidden /> Back to the original</button>
               </p>
+            )}
+          </div>
+
+          <div className="label-actions">
+            {busy ? (
+              <button className="label-run" onClick={() => abortRef.current?.abort()}>
+                <Square size={14} aria-hidden /> Stop
+              </button>
+            ) : (
+              <button className="label-run" onClick={() => start()} disabled={!canRun}>
+                <ScanSearch size={16} aria-hidden /> Annotate Image
+              </button>
+            )}
+            {diagnosis?.pending ? (
+              <button className="label-secondary" onClick={() => diagnoseAbort.current?.abort()}>
+                <Square size={14} aria-hidden /> Stop
+              </button>
+            ) : (
+              <button className="label-secondary" onClick={diagnose} disabled={upload?.status !== "ready"} title="AI interpretation of the image (research and education, not a medical diagnosis)">
+                <Stethoscope size={16} aria-hidden /> Diagnose
+              </button>
+            )}
+            {(run || diagnosis) && !busy && !diagnosis?.pending && (
+              <button className="link-btn" onClick={reset}><RotateCcw size={13} aria-hidden /> Start over</button>
             )}
           </div>
         </section>
