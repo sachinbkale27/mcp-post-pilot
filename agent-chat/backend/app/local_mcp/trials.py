@@ -69,7 +69,7 @@ class TrialPick(BaseModel):
         "criteria) that show it fits, e.g. the inclusion criterion about prior treatment"
     )
     to_confirm: list[str] = Field(
-        default_factory=list,
+        min_length=1,
         description="Eligibility points only the trial team can confirm (key exclusions, prior treatment, biomarkers)",
     )
 

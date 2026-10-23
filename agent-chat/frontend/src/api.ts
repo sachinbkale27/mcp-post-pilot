@@ -57,6 +57,7 @@ export type AgentEvent =
   | { type: "tool_result"; id: string; name: string; output: unknown; is_error: boolean; agent: string; delegation: string }
   | ({ type: "label_result" } & LabelResult)
   | { type: "diagnosis_regions"; medical: boolean; regions: DiagnosisRegion[]; diagnosis: string; lesion_area: string }
+  | { type: "trials_report"; report: string }
   | { type: "error"; message: string }
   | { type: "done" };
 
@@ -173,6 +174,11 @@ export function streamLabel(
   signal: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
   return streamEvents("/label", request, signal);
+}
+
+/** Run the Clinical Trials agent on one search; the trials are in its submit_trials result. */
+export function streamTrials(request: { question: string; person: string }, signal: AbortSignal): AsyncGenerator<AgentEvent> {
+  return streamEvents("/trials", request, signal);
 }
 
 /** Stream an AI interpretation of one image (token events; research and education, not a diagnosis). */

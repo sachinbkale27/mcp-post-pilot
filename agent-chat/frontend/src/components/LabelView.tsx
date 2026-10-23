@@ -380,8 +380,8 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
                     <FlaskConical size={15} aria-hidden /> Find clinical trials
                   </button>
                   <span>
-                    Opens Agent Chat with the question ready: add your city (and age, if you like), then send.
-                    It lists registry trials for {diagnosis.suspected}; it doesn't confirm the diagnosis.
+                    Opens the Clinical Trials search with {diagnosis.suspected} filled in: add your city, then search.
+                    Finding trials doesn't confirm the diagnosis.
                   </span>
                 </div>
               )}

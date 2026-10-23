@@ -98,7 +98,7 @@ async def test_report_only_accepts_trials_read_from_the_registry(monkeypatch):
     spec = AgentSpec(name="trials", title="t", description="d", mcp_url="local:trials", prompt="p")
     pick = {"nct_id": "NCT01234567", "why_matched": "For melanoma after immunotherapy",
             "evidence": "Progressed on at least one prior anti-PD-1 therapy", "to_confirm": ["No brain metastases"]}
-    invented = {"nct_id": "NCT09999999", "why_matched": "x", "evidence": "Drug A in Melanoma"}
+    invented = {"nct_id": "NCT09999999", "why_matched": "x", "evidence": "Drug A in Melanoma", "to_confirm": ["x"]}
 
     async with connect(spec) as mcp:
         assert {t.name for t in (await mcp.list_tools()).tools} == {"search_trials", "get_trial", "trial_locations", "submit_trials"}
@@ -142,7 +142,7 @@ async def test_trials_that_exclude_the_person_are_left_out(monkeypatch):
     monkeypatch.setattr(trials, "registry_get", fake_get)
     monkeypatch.setattr(trials, "screen", fake_screen)
     spec = AgentSpec(name="trials", title="t", description="d", mcp_url="local:trials", prompt="p")
-    pick = {"nct_id": "NCT01234567", "why_matched": "m", "evidence": "Drug A in Melanoma"}
+    pick = {"nct_id": "NCT01234567", "why_matched": "m", "evidence": "Drug A in Melanoma", "to_confirm": ["Stage"]}
     async with connect(spec) as mcp:
         await mcp.call_tool("search_trials", {"condition": "melanoma"})
         out = data(await mcp.call_tool("submit_trials", {"summary_text": "s", "trials": [pick], "person": "Progressed on osimertinib"}))
@@ -163,3 +163,18 @@ async def test_trials_that_exclude_the_person_are_left_out(monkeypatch):
         monkeypatch.setattr(trials, "screen", assumed)
         out = data(await mcp.call_tool("submit_trials", {"summary_text": "s", "trials": [pick], "person": "Progressed on osimertinib"}))
         assert [c["nct_id"] for c in out["trials"]] == ["NCT01234567"]
+
+
+def test_trials_endpoint_streams_the_agent(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app import main
+
+    async def fake_run(question, person=""):
+        assert question.startswith("Find") and person == "60-year-old woman"
+        yield {"type": "trials_report", "report": "| Trial |"}
+
+    monkeypatch.setattr(main, "run_trials", fake_run)
+    with TestClient(main.app) as client:
+        body = client.post("/trials", json={"question": "Find trials for melanoma", "person": "60-year-old woman"}).text
+    assert "event: trials_report" in body and "event: done" in body

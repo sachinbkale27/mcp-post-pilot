@@ -15,6 +15,7 @@ from .agent import list_agents, reset_thread, run_turn
 from .diagnose import run_diagnosis
 from .image_url import ImageUrlError, download_image
 from .labeling import LabelingUnavailable, run_labeling, warm_up
+from .trials_search import TrialsUnavailable, run_trials
 from .origin import OriginSecretMiddleware
 
 app = FastAPI(title="MCP Agent Chat")
@@ -71,6 +72,11 @@ class LabelRequest(BaseModel):
             if len(label) > MAX_LABEL:
                 raise ValueError(f"label names must be at most {MAX_LABEL} characters: {label!r} is {len(label)}")
         return labels
+
+
+class TrialsRequest(BaseModel):
+    question: str = Field(min_length=5, max_length=1500)  # the search, in words (the view builds it from its form)
+    person: str = Field(default="", max_length=1500)  # what is known about the person, for the eligibility screen
 
 
 class ImageUrlRequest(BaseModel):
@@ -160,6 +166,20 @@ async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
         ):
             yield _sse(event)
     except LabelingUnavailable as exc:
+        yield _sse({"type": "error", "message": str(exc)})
+    except Exception as exc:
+        yield _sse({"type": "error", "message": _error_message(exc)})
+    yield _sse({"type": "done"})
+
+
+@app.post("/trials", response_class=EventSourceResponse)
+async def trials(req: TrialsRequest) -> AsyncIterable[ServerSentEvent]:
+    """Run the Clinical Trials agent on one search and stream its progress; the trial cards are in the
+    submit_trials result, and a final trials_report event has the agent's report."""
+    try:
+        async for event in run_trials(req.question.strip(), req.person.strip()):
+            yield _sse(event)
+    except TrialsUnavailable as exc:
         yield _sse({"type": "error", "message": str(exc)})
     except Exception as exc:
         yield _sse({"type": "error", "message": _error_message(exc)})

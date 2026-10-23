@@ -1,8 +1,8 @@
-import { BookText, Bot, FileCode2, MessageSquarePlus, MessagesSquare, Network, PanelLeftClose, ScanSearch, SquareArrowOutUpRight } from "lucide-react";
+import { BookText, Bot, FileCode2, FlaskConical, MessageSquarePlus, MessagesSquare, Network, PanelLeftClose, ScanSearch, SquareArrowOutUpRight } from "lucide-react";
 import { BLOG_URL, type AgentInfo, type AgentsInfo } from "../api";
 import { toolMeta } from "../lib/tools";
 
-export type View = "chat" | "label";
+export type View = "chat" | "label" | "trials";
 
 interface Props {
   info?: AgentsInfo;
@@ -11,6 +11,7 @@ interface Props {
   open: boolean;
   view: View;
   labelingAvailable: boolean;
+  trialsAvailable: boolean;
   onViewChange: (view: View) => void;
   onNewChat: () => void;
   onRetry: () => void;
@@ -83,7 +84,7 @@ function AgentPanel({ agent, defaultOpen }: { agent: AgentInfo; defaultOpen: boo
   );
 }
 
-export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, onViewChange, onNewChat, onRetry, onClose }: Props) {
+export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, trialsAvailable, onViewChange, onNewChat, onRetry, onClose }: Props) {
   const online = info?.agents.filter((a) => a.online).length ?? 0;
   const status = infoError ? "offline" : info ? (online === info.agents.length ? "online" : "partial") : "connecting";
 
@@ -107,6 +108,11 @@ export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, 
         {labelingAvailable && (
           <button className={view === "label" ? "active" : undefined} onClick={() => onViewChange("label")} aria-current={view === "label" ? "page" : undefined}>
             <ScanSearch size={16} aria-hidden /> Annotate Images
+          </button>
+        )}
+        {trialsAvailable && (
+          <button className={view === "trials" ? "active" : undefined} onClick={() => onViewChange("trials")} aria-current={view === "trials" ? "page" : undefined}>
+            <FlaskConical size={16} aria-hidden /> Clinical Trials
           </button>
         )}
       </nav>

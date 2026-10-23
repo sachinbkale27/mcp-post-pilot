@@ -594,3 +594,25 @@ button { font: inherit; color: inherit; }
 .trial-evidence { display: block; margin-top: 4px; padding-left: 8px; border-left: 2px solid var(--line-2); color: var(--text-3); font-style: italic; }
 .trials-notes { margin: 0; padding: 8px 12px 8px 28px; border-radius: 10px; background: var(--bg-2); color: var(--text-2); font-size: 12.5px; }
 .trials-notes li + li { margin-top: 4px; }
+
+/* ---- clinical trials view ---- */
+.trials-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; }
+select.label-input { appearance: auto; padding-right: 8px; }
+select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
+.trials-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.trials-options .chip { cursor: pointer; }
+.trials-options .chip.active { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: 600; }
+.trials-patient-toggle { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; }
+.trials-patient { margin-top: 4px; padding: 2px 12px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.trials-question { margin-top: 16px; padding: 10px 12px; border-left: 3px solid var(--accent); border-radius: 8px; background: var(--accent-soft); }
+.trials-question span { color: var(--text-3); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.trials-question p { margin: 4px 0 0; color: var(--text); font-size: 14px; line-height: 1.5; }
+.trials-help { display: block; text-align: left; padding: 20px; }
+.trials-help p { margin: 0 0 8px; }
+.trials-help ul { margin: 0 0 10px; padding-left: 18px; }
+.trials-help li + li { margin-top: 4px; }
+.trials-summary { margin: 0 0 10px; color: var(--text); font-size: 14.5px; }
+.label-output .trials { padding: 0; }
+.capabilities-intro a { color: var(--accent); font-weight: 600; }
+@media (max-width: 520px) { .trials-row { grid-template-columns: 1fr; } }
+.trials-options .chip { padding: 5px 10px; font-size: 12.5px; }

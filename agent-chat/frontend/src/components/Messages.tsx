@@ -108,10 +108,11 @@ function ToolCard({ step }: { step: ToolStep }) {
   );
 }
 
-export function AgentCard({ step }: { step: AgentStep }) {
+/** showTrials: render the filed trials as cards (the Clinical Trials view shows them itself). */
+export function AgentCard({ step, showTrials = true }: { step: AgentStep; showTrials?: boolean }) {
   const [showTask, setShowTask] = useState(false);
   const running = step.finishedAt === undefined;
-  const trials = filedTrials(step.tools);
+  const trials = showTrials ? filedTrials(step.tools) : undefined;
   return (
     <div className={`agent-card agent-${step.agent}${step.isError ? " is-error" : ""}`}>
       <button className="agent-head" onClick={() => setShowTask(!showTask)} aria-expanded={showTask}>

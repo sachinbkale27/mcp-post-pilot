@@ -6,6 +6,7 @@ import { prepareImage } from "./lib/images";
 import { AgentTurn, UserMessage, type Turn } from "./components/Messages";
 import { applyEvent } from "./lib/events";
 import { LabelView } from "./components/LabelView";
+import { TrialsView } from "./components/TrialsView";
 import { Brand, Sidebar, type View } from "./components/Sidebar";
 
 const SUGGESTIONS = [
@@ -57,9 +58,11 @@ const TRIAL_EXAMPLES = [
   },
 ];
 
-/** #annotate (or the earlier #label) opens the annotation view. */
+const HASHES: Record<string, View> = { "#annotate": "label", "#label": "label", "#trials": "trials" };
+
+/** #annotate (or the earlier #label) opens the annotation view, #trials the clinical trials search. */
 function viewFromHash(): View {
-  return location.hash === "#annotate" || location.hash === "#label" ? "label" : "chat";
+  return HASHES[location.hash] ?? "chat";
 }
 
 export function App() {
@@ -77,6 +80,9 @@ export function App() {
   const [view, setView] = useState<View>(viewFromHash);
   const [labeling, setLabeling] = useState(false);
   const [focusComposer, setFocusComposer] = useState(0);
+  const [searchingTrials, setSearchingTrials] = useState(false);
+  const [trialsPrefill, setTrialsPrefill] = useState<{ condition: string; key: number }>();
+  const trialsAgent = info?.agents.find((a) => a.name === "trials");
   const labelsAgent = info?.agents.find((a) => a.name === "labels");
 
   // #annotate opens the annotation view, so it can be linked to and survives a reload
@@ -88,7 +94,8 @@ export function App() {
   function openView(next: View) {
     setView(next);
     setSidebarOpen(false);
-    history.replaceState(null, "", next === "label" ? "#annotate" : location.pathname + location.search);
+    const hash = next === "label" ? "#annotate" : next === "trials" ? "#trials" : "";
+    history.replaceState(null, "", hash || location.pathname + location.search);
   }
 
   const loadInfo = () => {
@@ -99,7 +106,7 @@ export function App() {
 
   useEffect(() => {
     const first = turns[0] && (turns[0].user || "Images");
-    const title = view === "label" ? "Annotate Images" : first && first.slice(0, 40);
+    const title = view === "label" ? "Annotate Images" : view === "trials" ? "Clinical Trials" : first && first.slice(0, 40);
     document.title = title ? `${title} · Post Pilot Agent` : "Post Pilot Agent";
   }, [turns, view]);
 
@@ -180,6 +187,7 @@ export function App() {
         open={sidebarOpen}
         view={view}
         labelingAvailable={!!labelsAgent}
+        trialsAvailable={!!trialsAgent}
         onViewChange={openView}
         onNewChat={() => { newChat(); openView("chat"); }}
         onRetry={loadInfo}
@@ -194,7 +202,7 @@ export function App() {
           </button>
           <div className="only-mobile"><Brand /></div>
           <h1 className="topbar-title hide-mobile">
-            {view === "label" ? "Annotate Images" : turns[0] ? turns[0].user || "Images" : "New conversation"}
+            {view === "label" ? "Annotate Images" : view === "trials" ? "Clinical Trials" : turns[0] ? turns[0].user || "Images" : "New conversation"}
           </h1>
           {info && <span className="model-chip"><Sparkles size={13} aria-hidden /> {info.model}</span>}
         </header>
@@ -212,10 +220,24 @@ export function App() {
             busy={labeling}
             onBusyChange={setLabeling}
             onFindTrials={
-              info?.agents.some((a) => a.name === "trials")
-                ? (dx) => draft(`Find recruiting clinical trials for ${dx} near `)
+              trialsAgent
+                ? (dx) => { setTrialsPrefill({ condition: dx, key: Date.now() }); openView("trials"); }
                 : undefined
             }
+          />
+        </div>
+
+        <div className="scroll" hidden={view !== "trials"}>
+          <TrialsView
+            available={!info || !!trialsAgent?.online}
+            unavailableReason={
+              !trialsAgent
+                ? "The Clinical Trials agent isn't configured on this server."
+                : `The Clinical Trials agent is offline${trialsAgent.error ? `: ${trialsAgent.error}` : "."}`
+            }
+            busy={searchingTrials}
+            onBusyChange={setSearchingTrials}
+            prefill={trialsPrefill}
           />
         </div>
 
@@ -272,7 +294,8 @@ export function App() {
                   <p className="capabilities-intro">
                     Searches the public ClinicalTrials.gov registry. The more you say (condition, place, age,
                     biomarker, prior treatment), the better the matches. It explains each trial; only the trial
-                    team can confirm eligibility.
+                    team can confirm eligibility. Prefer a form? Use the{" "}
+                    <a href="#trials" onClick={(e) => { e.preventDefault(); openView("trials"); }}>Clinical Trials search</a>.
                   </p>
                   <div className="capability-grid">
                     {TRIAL_EXAMPLES.map(({ icon: Icon, title, body, example }) => (
