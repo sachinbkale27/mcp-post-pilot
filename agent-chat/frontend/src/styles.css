@@ -715,3 +715,15 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 .callout-count { fill: var(--text-3); font-weight: 500; }
 .leader-halo { fill: none; stroke: rgb(255 255 255 / 0.75); stroke-linejoin: round; }
 .label-canvas:has(.annotated-figure) { justify-self: stretch; overflow: visible; background: none; }
+
+/* ---- download and annotate further ---- */
+.annotate-further { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); }
+.annotate-further h4, .label-downloads-title {
+  display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--text-3);
+  font: 600 11px/1.2 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.label-downloads-title { margin-top: 14px; }
+.annotate-further ol { margin: 10px 0 0; padding-left: 20px; color: var(--text-2); font-size: 13px; line-height: 1.6; }
+.annotate-further ol a { color: var(--accent); font-weight: 600; }
+a.label-download { text-decoration: none; }
+.label-download.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }

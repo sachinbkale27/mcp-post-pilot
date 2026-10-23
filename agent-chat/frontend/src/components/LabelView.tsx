@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CircleAlert, CircleCheck, Download, FlaskConical, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
+import { CircleAlert, CircleCheck, Download, FlaskConical, PenTool, SquareArrowOutUpRight, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
 import {
   fetchImageFromUrl, streamDiagnosis, streamLabel, streamPathology, uploadImage, warmUpLabeling,
   type AgentEvent, type DiagnosisRegion, type LabelResult, type PathologyAction, type QualityResult,
@@ -546,6 +546,30 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
         </p>
       )}
 
+      <section className="annotate-further" aria-labelledby="annotate-further-heading">
+        <h4 id="annotate-further-heading"><PenTool size={15} aria-hidden /> Download and annotate further</h4>
+        <div className="label-downloads">
+          <button className="label-download" onClick={() => downloadDataUrl(image, `${base}.${image.startsWith("data:image/png") ? "png" : "jpg"}`)}>
+            <Download size={14} aria-hidden /> Image
+          </button>
+          <button className="label-download" onClick={() => download(`${base}.coco.json`, JSON.stringify(result.exports.coco, null, 2), "application/json")} disabled={!exportable}>
+            <Download size={14} aria-hidden /> Annotations (COCO)
+          </button>
+          <button className="label-download" onClick={() => downloadFigure(base)} disabled={!result.annotations.length}>
+            <Download size={14} aria-hidden /> Annotated image (PNG)
+          </button>
+          <a className="label-download primary" href="https://labels.sachin-kale.com/" target="_blank" rel="noreferrer">
+            <SquareArrowOutUpRight size={14} aria-hidden /> Open Image Label
+          </a>
+        </div>
+        <ol>
+          <li>Download the <strong>image</strong> and its <strong>annotations (COCO)</strong>.</li>
+          <li>Open <a href="https://labels.sachin-kale.com/" target="_blank" rel="noreferrer">Image Label</a> and upload the image.</li>
+          <li>Press <strong>Import</strong> in its toolbar and choose the COCO file: the outlines appear, ready to edit, add to and export again.</li>
+        </ol>
+      </section>
+
+      <h4 className="label-downloads-title">Training data</h4>
       <div className="label-downloads">
         <button className="label-download" onClick={() => download(`${base}.coco.json`, JSON.stringify(result.exports.coco, null, 2), "application/json")} disabled={!exportable}>
           <Download size={14} aria-hidden /> COCO JSON
@@ -576,6 +600,39 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
       </p>
     </div>
   );
+}
+
+function downloadDataUrl(dataUrl: string, filename: string) {
+  Object.assign(document.createElement("a"), { href: dataUrl, download: filename }).click();
+}
+
+/** The annotated figure (image, outlines and callouts) as a PNG, drawn from the SVG on the page. */
+async function downloadFigure(base: string) {
+  const svg = document.querySelector<SVGSVGElement>(".annotated-figure");
+  if (!svg) return;
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  // Styles from the stylesheet don't travel with the SVG: copy the ones that matter onto each element
+  const live = svg.querySelectorAll("*");
+  clone.querySelectorAll("*").forEach((el, i) => {
+    const css = getComputedStyle(live[i]);
+    for (const prop of ["fill", "stroke", "stroke-width", "stroke-dasharray", "opacity", "font-family", "font-weight", "font-size"]) {
+      (el as SVGElement).style.setProperty(prop, css.getPropertyValue(prop));
+    }
+  });
+  const { width, height } = svg.viewBox.baseVal;
+  const scale = Math.max(1, 1600 / width); // at least 1600 px wide, so text stays sharp
+  clone.setAttribute("width", String(width * scale));
+  clone.setAttribute("height", String(height * scale));
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml" }));
+  const img = new Image();
+  await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
+  const canvas = Object.assign(document.createElement("canvas"), { width: width * scale, height: height * scale });
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  URL.revokeObjectURL(url);
+  downloadDataUrl(canvas.toDataURL("image/png"), `${base}-annotated.png`);
 }
 
 function download(filename: string, content: string, type: string) {
