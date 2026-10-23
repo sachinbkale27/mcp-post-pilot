@@ -3,6 +3,7 @@
 import os
 import uuid
 from collections.abc import AsyncIterable
+from typing import Literal
 
 import openai
 from fastapi import FastAPI, HTTPException
@@ -54,6 +55,7 @@ class LabelRequest(BaseModel):
     labels: list[str] = Field(default_factory=list, max_length=20)
     category: str = Field(default="agent-chat", max_length=60)
     grid_step: int | None = Field(default=None, ge=10, le=1000)  # the model's copy has a pixel grid this far apart
+    model: Literal["sam", "medsam"] = "sam"  # Segment Anything, or MedSAM for medical images
 
     @field_validator("labels")
     @classmethod
@@ -101,7 +103,12 @@ async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
     a final label_result event (saved annotations and COCO / YOLO exports)."""
     try:
         async for event in run_labeling(
-            req.image.model_dump(), req.instructions, req.labels, req.category.strip() or "agent-chat", req.grid_step
+            req.image.model_dump(),
+            req.instructions,
+            req.labels,
+            req.category.strip() or "agent-chat",
+            req.grid_step,
+            req.model,
         ):
             yield _sse(event)
     except LabelingUnavailable as exc:

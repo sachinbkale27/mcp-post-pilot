@@ -1,7 +1,7 @@
 /** How agent tool calls are presented: kind, icon and plain-language labels. */
 import {
   BookOpen, ChartColumn, Dna, Eraser, FileDown, FilePen, FilePlus2, FileSearch, FileText, Globe, ImageUp, Images, Library, Link2, List,
-  type LucideIcon, Microscope, PenTool, Replace, SearchCheck, Send, Tags, Trash2, Undo2, WandSparkles, Wrench,
+  type LucideIcon, Microscope, PenTool, Replace, ScanSearch, SearchCheck, Send, Tags, Trash2, Undo2, WandSparkles, Wrench,
 } from "lucide-react";
 
 export type ToolKind = "read" | "write" | "destructive";
@@ -90,6 +90,11 @@ const TOOLS: Record<string, ToolMeta> = {
     kind: "write", icon: PenTool,
     running: (a) => `Adding ${Array.isArray(a.annotations) ? a.annotations.length : ""} annotations`,
     done: (a) => `Added ${Array.isArray(a.annotations) ? a.annotations.length : ""} annotations`,
+  },
+  segment_objects: {
+    kind: "write", icon: ScanSearch,
+    running: (a) => `Tracing ${count(a.objects, "outline")}${a.model === "medsam" ? " with MedSAM" : ""}`,
+    done: (a) => `Traced ${count(a.objects, "outline")}${a.model === "medsam" ? " with MedSAM" : ""}`,
   },
   replace_annotations: { kind: "destructive", icon: Replace, running: () => "Replacing annotations", done: () => "Replaced annotations" },
   remove_annotations: { kind: "destructive", icon: Eraser, running: () => "Removing annotations", done: () => "Removed annotations" },

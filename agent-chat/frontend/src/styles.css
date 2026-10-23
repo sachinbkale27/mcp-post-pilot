@@ -461,6 +461,15 @@ button { font: inherit; color: inherit; }
 .label-field { display: grid; gap: 6px; margin-top: 12px; }
 .label-field > span { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 13px; font-weight: 500; }
 .label-field em { color: var(--text-3); font-style: normal; font-weight: 400; }
+.segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); }
+.segmented button {
+  display: grid; gap: 1px; padding: 7px 8px; border: 0; border-radius: 7px; background: none;
+  color: var(--text-2); font: 500 13px/1.3 var(--font-ui); cursor: pointer; text-align: center;
+}
+.segmented button .mono { font-size: 11px; color: var(--text-3); }
+.segmented button.active { background: var(--raised); color: var(--text); box-shadow: 0 0 0 1px var(--line-2); }
+.segmented button.active .mono { color: var(--accent); }
+.label-hint { color: var(--text-3); font-size: 12px; }
 .label-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .label-examples .chip { cursor: pointer; font-family: var(--font-ui); text-align: left; }
 .label-examples .chip:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }

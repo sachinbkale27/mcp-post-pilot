@@ -1,7 +1,7 @@
 """Label one image with the Labeling agent, for the chat UI's "Label images" view.
 
     upload_image_from_url  (called here)    -> the image is in Image Label, with its size
-    Labeling agent          (LLM + vision)  -> add_annotations as the instructions ask
+    Labeling agent          (LLM + vision)  -> rough boxes -> segment_objects (Segment Anything traces them)
     get_image, export_annotations (here)    -> the saved shapes and COCO / YOLO exports for the UI
 
 Only the annotating is left to the model; uploading and reading the result back are done in code, so the
@@ -26,9 +26,11 @@ image attached here: do not upload it again.
 
 What to label: {instructions}
 {labels}{grid}
-Look at the image, then add all the annotations in one add_annotations call on image {image_id}, using
-polygons (or circles for round objects) so they export as training data, with confidence "low" or "medium".
-Report what you labeled and anything you were unsure about."""
+Look at the image, then outline every object to label with one segment_objects call on image {image_id}
+(model "{model}"): give each a rough box that contains the whole object, a little loose rather than tight;
+the segmentation model traces the exact edges. Only if segment_objects fails for an object, draw that one
+yourself with add_annotations (a polygon, confidence "low"). Report what you labeled, the scores, and
+anything you were unsure about."""
 
 
 GRID = """The attached copy has a yellow grid drawn on it, with lines every {step} pixels labelled with their
@@ -57,7 +59,12 @@ def _decode(content: str) -> Any:
 
 
 async def run_labeling(
-    image: dict[str, str], instructions: str, labels: list[str], category: str, grid_step: int | None = None
+    image: dict[str, str],
+    instructions: str,
+    labels: list[str],
+    category: str,
+    grid_step: int | None = None,
+    model: str = "sam",
 ) -> AsyncIterator[dict[str, Any]]:
     """Yield UI events while the image is uploaded, annotated and exported."""
     spec = labeling_agent()
@@ -98,6 +105,7 @@ async def run_labeling(
                     instructions=instructions,
                     labels=label_line,
                     grid=GRID.format(step=grid_step) if grid_step else "",
+                    model=model,
                 ),
                 user_text=instructions,
                 images=[image],

@@ -9,11 +9,16 @@ Images
 Annotations
 - Coordinates are image pixels, origin top-left. Call get_image first and keep every point inside
   0..width and 0..height.
+- To outline objects, use segment_objects: give each object a label and a rough box around it (a little
+  loose is better than cutting it off), and Segment Anything traces the exact edges and saves polygons.
+  Use model "medsam" for medical images (CT, MRI, X-ray, ultrasound, endoscopy, pathology). Report the
+  scores and anything in "failed". A precise outline can still be of the wrong object if a box was off.
+- Use add_annotations for pins, arrows and shapes the user specifies, or for objects segment_objects
+  failed on.
 - Training data must be polygons or circles: rectangles, pins and arrows are left out of exports. For a
   box, use a 4-point polygon.
-- When you place shapes from your own view of an image, set confidence "low" or "medium", say that the
-  shapes are approximate, and ask the user to review them in the web app. Never present estimated
-  boundaries as precise.
+- When you draw shapes yourself (add_annotations), set confidence "low" or "medium", say that the shapes
+  are approximate, and ask the user to review them. Never present estimated boundaries as precise.
 - Reuse label names already used in the dataset (check with list_images and get_image) instead of
   inventing near-duplicates.
 - Send all annotations for one image in one add_annotations call. Prefer add_annotations and

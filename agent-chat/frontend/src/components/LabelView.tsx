@@ -43,6 +43,7 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
   const [upload, setUpload] = useState<Upload>();
   const [instructions, setInstructions] = useState("");
   const [labels, setLabels] = useState("");
+  const [model, setModel] = useState<"sam" | "medsam">("sam");
   const [run, setRun] = useState<Run>();
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -82,6 +83,7 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
       const request = {
         image: { url: upload.url, data_url: grid.dataUrl, name: upload.name },
         grid_step: grid.step,
+        model,
         instructions: instructions.trim(),
         labels: labels.split(",").map((l) => l.trim()).filter(Boolean),
       };
@@ -110,8 +112,9 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
       <header className="label-intro">
         <h2><ScanSearch size={22} aria-hidden /> Annotate Images</h2>
         <p>
-          Upload a photo and say what to label. The Labeling agent saves it in Image Label, draws polygons or
-          circles around what you asked for, and you can download the result as COCO or YOLO training data.
+          Upload an image and say what to label. The Labeling agent saves it in Image Label and finds each
+          object; Segment Anything (or MedSAM for medical scans) traces its exact outline. Download the
+          result as COCO or YOLO training data.
         </p>
       </header>
 
@@ -171,6 +174,26 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
             <span><Tag size={13} aria-hidden /> Label names <em>(optional, comma-separated)</em></span>
             <input className="label-input" value={labels} placeholder="person, car" onChange={(e) => setLabels(e.target.value)} disabled={busy} />
           </label>
+          <div className="label-field">
+            <span id="label-model">Image type</span>
+            <div className="segmented" role="radiogroup" aria-labelledby="label-model">
+              {([["sam", "Photo or general image", "SAM"], ["medsam", "Medical scan", "MedSAM"]] as const).map(([value, text, name]) => (
+                <button
+                  key={value}
+                  role="radio"
+                  aria-checked={model === value}
+                  className={model === value ? "active" : undefined}
+                  onClick={() => setModel(value)}
+                  disabled={busy}
+                >
+                  {text} <span className="mono">{name}</span>
+                </button>
+              ))}
+            </div>
+            {model === "medsam" && (
+              <small className="label-hint">CT, MRI, X-ray, ultrasound, endoscopy or pathology. For research and datasets, not diagnosis.</small>
+            )}
+          </div>
           <div className="label-examples">
             {EXAMPLES.map((ex) => (
               <button key={ex.instructions} className="chip" onClick={() => { setInstructions(ex.instructions); setLabels(ex.labels); }} disabled={busy}>
@@ -250,8 +273,8 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
         <p className="label-alert"><CircleAlert size={16} aria-hidden /> The agent saved no annotations. Try more specific instructions.</p>
       ) : (
         <p className="label-note">
-          Dashed shapes are low confidence. All shapes are the agent's estimates: check them before you train on
-          them. {exportable < result.annotations.length && `${result.annotations.length - exportable} pin, arrow or rectangle shapes are left out of exports.`}
+          Outlines are traced by Segment Anything from the agent's boxes; dashed ones scored low. Check that each
+          outline is the right object before you train on it. {exportable < result.annotations.length && `${result.annotations.length - exportable} pin, arrow or rectangle shapes are left out of exports.`}
         </p>
       )}
 
