@@ -3,8 +3,8 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CircleAlert, CircleCheck, Download, FlaskConical, PenTool, Sparkles, SquareArrowOutUpRight, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
 import {
-  fetchImageFromUrl, streamDiagnosis, streamLabel, streamPathology, uploadImage, warmUpLabeling,
-  type AgentEvent, type DiagnosisRegion, type LabelResult, type PathologyAction, type QualityResult,
+  BLOG_URL, GENETICS_URL, fetchImageFromUrl, handOffResults, streamDiagnosis, streamLabel, streamPathology, uploadImage, warmUpLabeling,
+  type AgentEvent, type DiagnosisRegion, type LabelResult, type NucleiSummary, type PathologyAction, type QualityResult,
 } from "../api";
 import { applyEvent } from "../lib/events";
 import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
@@ -75,6 +75,9 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
   const abortRef = useRef<AbortController | null>(null);
   // The image's id in Image Label once a run has uploaded it, so the histology tools don't upload it again
   const [labelImageId, setLabelImageId] = useState<string>();
+  // The latest quality check and nuclei measurements on this image, for Ask AI
+  const [lastQuality, setLastQuality] = useState<QualityResult>();
+  const [lastNuclei, setLastNuclei] = useState<NucleiSummary>();
   // While the stain-normalized copy is shown: the original, to go back to
   const [original, setOriginal] = useState<{ upload: Upload; imageId?: string }>();
 
@@ -98,6 +101,8 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     if (!file || (busy && !keepOriginal)) return;
     setRun(undefined);
     setLabelImageId(undefined);
+    setLastQuality(undefined);
+    setLastNuclei(undefined);
     if (!keepOriginal) setOriginal(undefined);
     diagnoseAbort.current?.abort();
     setDiagnosis(undefined);
@@ -192,8 +197,13 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     try {
       const request = { image: { url: upload.url, data_url: upload.preview, name: upload.name }, action, image_id: labelImageId };
       for await (const event of streamPathology(request, controller.signal)) {
-        if (event.type === "label_result") update((r) => ({ ...r, result: event }));
-        else if (event.type === "quality_result") update((r) => ({ ...r, quality: event }));
+        if (event.type === "label_result") {
+          update((r) => ({ ...r, result: event }));
+          if (event.nuclei_summary) setLastNuclei(event.nuclei_summary);
+        } else if (event.type === "quality_result") {
+          update((r) => ({ ...r, quality: event }));
+          setLastQuality(event);
+        }
         else if (event.type === "label_image") setLabelImageId(event.image_id);
         else if (event.type === "normalized") normalized = event;
         else if (event.type === "error") update((r) => ({ ...r, error: event.message }));
@@ -215,6 +225,37 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
       abortRef.current = null;
       update((r) => ({ ...r, pending: false }));
       onBusyChange(false);
+    }
+  }
+
+  /** Ask AI: hand this image's results to genetics.sachin-kale.com's assistant and open a chat about them. */
+  async function askAI() {
+    // Opened now, while the click still counts as the user's: a window opened after the request would be blocked
+    const tab = window.open("", "_blank");
+    if (tab) tab.opener = null; // the other site gets no handle on this page
+    const annotations = run?.result?.annotations ?? [];
+    const counts = new Map<string, number>();
+    for (const a of annotations) {
+      if (/nucleus$/i.test(a.label) || /^suspected\b/i.test(a.label)) continue;
+      counts.set(a.label, (counts.get(a.label) ?? 0) + 1);
+    }
+    const significance = new Map((diagnosis?.regions ?? []).map((r) => [r.label, r.significance]));
+    try {
+      const url = await handOffResults({
+        image_url: upload?.url?.startsWith("/") && BLOG_URL.startsWith("https://") ? `${BLOG_URL}${upload.url}` : undefined,
+        image_name: (upload?.name ?? "").slice(0, 200),
+        suspected_diagnosis: (diagnosis?.suspected ?? "").slice(0, 200),
+        findings: [...counts].slice(0, 20).map(([label, count]) => ({ label: label.slice(0, 120), count, significance: (significance.get(label) ?? "").slice(0, 400) })),
+        nuclei: run?.result?.nuclei_summary ?? lastNuclei,
+        quality: lastQuality && { verdict: lastQuality.verdict, warnings: lastQuality.warnings.slice(0, 8) },
+        interpretation: (diagnosis?.text ?? "").slice(0, 8000),
+        report: (run?.result?.report ?? "").slice(0, 4000),
+      });
+      if (tab) tab.location.href = url;
+      else window.open(url, "_blank");
+    } catch {
+      // The assistant still opens, just without the results
+      if (tab) tab.location.href = GENETICS_URL;
     }
   }
 
@@ -447,7 +488,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
 
           {/* The annotated image comes first: the interpretation below can be long */}
           <div ref={resultRef} className="label-result-anchor">
-            {run?.result && upload?.preview && <LabelResultView result={run.result} image={upload.preview} name={upload.name} />}
+            {run?.result && upload?.preview && <LabelResultView result={run.result} image={upload.preview} name={upload.name} onAskAI={askAI} />}
           </div>
           {run?.quality && <QualityCard quality={run.quality} />}
           {run?.pending && (
@@ -513,7 +554,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
   );
 }
 
-function LabelResultView({ result, image, name }: { result: LabelResult; image: string; name: string }) {
+function LabelResultView({ result, image, name, onAskAI }: { result: LabelResult; image: string; name: string; onAskAI: () => void }) {
   const nuclei = result.nuclei_summary;
   const exportable = result.annotations.filter((a) => a.type === "polygon" || a.type === "circle").length;
   const base = name.replace(/\.[^.]+$/, "") || "image";
@@ -548,9 +589,9 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
 
       <div className="ask-ai-row">
         <span>Questions about these results?</span>
-        <a className="ask-ai" href="https://genetics.sachin-kale.com/" target="_blank" rel="noreferrer">
+        <button className="ask-ai" onClick={onAskAI} title="Opens the genetics assistant with these results">
           <Sparkles size={16} aria-hidden /> Ask AI <SquareArrowOutUpRight size={13} aria-hidden />
-        </a>
+        </button>
       </div>
 
       <section className="annotate-further" aria-labelledby="annotate-further-heading">

@@ -738,6 +738,7 @@ a.label-download { text-decoration: none; }
 }
 .ask-ai-row span { color: var(--text); font-size: 14px; font-weight: 500; }
 .ask-ai {
+  border: 0; cursor: pointer;
   display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 999px;
   background: linear-gradient(135deg, #7c3aed, #db2777); color: #fff; font: 600 14px/1 var(--font-ui);
   text-decoration: none; box-shadow: 0 4px 14px rgb(124 58 237 / 0.35); transition: transform 0.15s, box-shadow 0.15s;

@@ -204,6 +204,33 @@ export function streamTrials(request: { question: string; person: string }, sign
   return streamEvents("/trials", request, signal);
 }
 
+const GENETICS_API_URL = import.meta.env.VITE_GENETICS_API_URL ?? "https://genapi.sachin-kale.com";
+export const GENETICS_URL = import.meta.env.VITE_GENETICS_URL ?? "https://genetics.sachin-kale.com";
+
+/** A summary of an image analysis for genetics.sachin-kale.com's assistant ("Ask AI"). */
+export interface ResultsHandoff {
+  image_url?: string;
+  image_name: string;
+  suspected_diagnosis: string;
+  findings: { label: string; count: number; significance: string }[];
+  nuclei?: NucleiSummary;
+  quality?: { verdict: QualityResult["verdict"]; warnings: string[] };
+  interpretation: string;
+  report: string;
+}
+
+/** Store the summary with the genetics assistant for a day; returns the address that opens a chat about it. */
+export async function handOffResults(results: ResultsHandoff): Promise<string> {
+  const res = await fetch(`${GENETICS_API_URL}/api/v1/results`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(results),
+  });
+  if (!res.ok) throw new Error(`Could not hand the results over (${res.status})`);
+  const { results_id } = await res.json();
+  return `${GENETICS_URL}/?results=${encodeURIComponent(results_id)}`;
+}
+
 /** Run one histopathology tool (StarDist nuclei, quality check, stain normalization) on an image. */
 export function streamPathology(
   request: { image: ChatImage; action: PathologyAction; image_id?: string },
