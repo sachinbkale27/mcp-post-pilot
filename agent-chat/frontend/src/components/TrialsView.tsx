@@ -254,7 +254,7 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
                     onChange={(e) => set({ age: e.target.value.replace(/\D/g, "").slice(0, 3) })} disabled={busy} />
                 </label>
                 <label className="label-field">
-                  <span>Sex</span>
+                  <span>Gender</span>
                   <select className="label-input" value={form.sex} onChange={(e) => set({ sex: e.target.value as Sex })} disabled={busy}>
                     <option value="">Not specified</option>
                     <option value="female">Female</option>

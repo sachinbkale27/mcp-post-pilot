@@ -47,7 +47,7 @@ const TRIAL_EXAMPLES = [
   {
     icon: Target,
     title: "Match a patient profile",
-    body: "Add age, sex, a biomarker or prior treatments: it reads each trial's criteria and lists what the trial team must confirm.",
+    body: "Add age, gender, a biomarker or prior treatments: it reads each trial's criteria and lists what the trial team must confirm.",
     example: "Phase 2 or 3 trials for EGFR-mutant non-small cell lung cancer that progressed on osimertinib, for a 60-year-old woman, in India.",
   },
   {
