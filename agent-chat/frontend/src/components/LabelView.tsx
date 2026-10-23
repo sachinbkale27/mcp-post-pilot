@@ -187,7 +187,9 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
       const areaModel: Model = found.medical ? "medsam" : "sam";
       // The leading diagnosis goes on the lesional area as one outline, visibly marked as AI-suspected;
       // the findings keep their descriptive labels
-      const suspected = found.diagnosis ? `Suspected ${found.diagnosis} (AI)` : "";
+      // "Malignant melanoma" -> "Suspected malignant melanoma (AI)"; abbreviations such as "DCIS" keep their case
+      const dx = /^[A-Z][a-z]/.test(found.diagnosis) ? found.diagnosis[0].toLowerCase() + found.diagnosis.slice(1) : found.diagnosis;
+      const suspected = dx ? `Suspected ${dx} (AI)` : "";
       const lesion = suspected
         ? `First, one outline labelled "${suspected}" around the main abnormal area: ${found.lesion_area}. ` +
           "Use one box around that whole area (it may cover most of the image), confidence \"low\", and the note " +
@@ -364,7 +366,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
               <h4>Problematic regions</h4>
               {diagnosis.suspected && (
                 <p className="diagnosis-suspected">
-                  Outlined as <strong>Suspected {diagnosis.suspected} (AI)</strong>: the AI's leading interpretation,
+                  Outlined as <strong>Suspected {diagnosis.suspected.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())} (AI)</strong>: the AI's leading interpretation,
                   not a diagnosis. It needs confirmation by a pathologist.
                 </p>
               )}
