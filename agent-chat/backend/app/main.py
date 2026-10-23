@@ -147,7 +147,7 @@ async def label_warmup(req: WarmupRequest):
 
 @app.post("/label", response_class=EventSourceResponse)
 async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
-    """Upload one image to Image Label, have the Labeling agent annotate it, and stream the progress and
+    """Upload one image to Image Label, have the Image Annotation Agent annotate it, and stream the progress and
     a final label_result event (saved annotations and COCO / YOLO exports)."""
     try:
         async for event in run_labeling(

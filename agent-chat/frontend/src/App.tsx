@@ -176,8 +176,8 @@ export function App() {
             available={!info || !!labelsAgent?.online}
             unavailableReason={
               !labelsAgent
-                ? "The Labeling agent isn't configured on this server."
-                : `The Labeling agent is offline${labelsAgent.error ? `: ${labelsAgent.error}` : "."}`
+                ? "The Image Annotation Agent isn't configured on this server."
+                : `The Image Annotation Agent is offline${labelsAgent.error ? `: ${labelsAgent.error}` : "."}`
             }
             busy={labeling}
             onBusyChange={setLabeling}
@@ -205,7 +205,7 @@ export function App() {
                 publish posts), the Genetics agent researches ClinVar, gnomAD, NCBI Gene and PubMed
                 {info?.agents.some((a) => a.name === "labels") ? (
                   <>
-                    , and the Labeling agent annotates your images in{" "}
+                    , and the Image Annotation Agent annotates your images in{" "}
                     <a href="https://labels.sachin-kale.com" target="_blank" rel="noreferrer">Image Label</a> and exports
                     COCO or YOLO training data (try{" "}
                     <a href="#annotate" onClick={(e) => { e.preventDefault(); openView("label"); }}>Annotate Images</a>)

@@ -1,7 +1,7 @@
-"""Label one image with the Labeling agent, for the chat UI's "Label images" view.
+"""Label one image with the Image Annotation Agent, for the chat UI's "Label images" view.
 
     upload_image_from_url  (called here)    -> the image is in Image Label, with its size
-    Labeling agent          (LLM + vision)  -> rough boxes -> segment_objects (Segment Anything traces them)
+    Image Annotation Agent          (LLM + vision)  -> rough boxes -> segment_objects (Segment Anything traces them)
     get_image, export_annotations (here)    -> the saved shapes and COCO / YOLO exports for the UI
 
 Only the annotating is left to the model; uploading and reading the result back are done in code, so the
@@ -58,7 +58,7 @@ class LabelingUnavailable(RuntimeError):
 def labeling_agent() -> AgentSpec:
     spec = next((s for s in load_agents() if s.name == LABEL_AGENT), None)
     if spec is None:
-        raise LabelingUnavailable("The Labeling agent isn't configured on this server (LABELS_MCP_URL is not set).")
+        raise LabelingUnavailable("The Image Annotation Agent isn't configured on this server (LABELS_MCP_URL is not set).")
     return spec
 
 

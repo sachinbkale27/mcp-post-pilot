@@ -5,7 +5,7 @@ radiologist's read (findings, most likely interpretation, differential, what wou
 always framed as research and education, not a diagnosis.
 
 A second, small call then turns the interpretation into the areas to outline (a diagnosis_regions
-event); the UI hands those to the Labeling agent, so the findings are shown on the image.
+event); the UI hands those to the Image Annotation Agent, so the findings are shown on the image.
 """
 
 import re

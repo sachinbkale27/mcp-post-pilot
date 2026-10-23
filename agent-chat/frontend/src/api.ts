@@ -60,7 +60,7 @@ export type AgentEvent =
   | { type: "error"; message: string }
   | { type: "done" };
 
-/** A problematic area found by Diagnose, outlined on the image by the Labeling agent. */
+/** A problematic area found by Diagnose, outlined on the image by the Image Annotation Agent. */
 export interface DiagnosisRegion {
   label: string;
   description: string;
@@ -83,7 +83,7 @@ export interface Annotation {
   notes?: string;
 }
 
-/** What the Labeling agent produced for one image (the label_result event). */
+/** What the Image Annotation Agent produced for one image (the label_result event). */
 export interface LabelResult {
   image_id: string;
   width: number;
@@ -143,7 +143,7 @@ export function streamChat(
   return streamEvents("/chat", { message, conversation_id: conversationId, images }, signal);
 }
 
-/** Upload one image to Image Label and have the Labeling agent annotate it; ends with a label_result event. */
+/** Upload one image to Image Label and have the Image Annotation Agent annotate it; ends with a label_result event. */
 export function streamLabel(
   request: { image: ChatImage; instructions: string; labels: string[]; grid_step?: number; model?: "sam" | "medsam" },
   signal: AbortSignal,

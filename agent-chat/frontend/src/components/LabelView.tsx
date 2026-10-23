@@ -46,13 +46,13 @@ type Model = "sam" | "medsam";
 
 interface Props {
   active: boolean;      // the view is showing
-  available: boolean;   // the Labeling agent is configured and online
+  available: boolean;   // the Image Annotation Agent is configured and online
   unavailableReason?: string;
   busy: boolean;
   onBusyChange: (busy: boolean) => void;
 }
 
-/** Upload an image, say what to label, and watch the Labeling agent annotate it. */
+/** Upload an image, say what to label, and watch the Image Annotation Agent annotate it. */
 export function LabelView({ active, available, unavailableReason, busy, onBusyChange }: Props) {
   const [upload, setUpload] = useState<Upload>();
   const [instructions, setInstructions] = useState("");
@@ -119,7 +119,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     else if (url) addUrl(url);
   }
 
-  /** Run the Labeling agent: with the form's settings, or with the areas a diagnosis found. */
+  /** Run the Image Annotation Agent: with the form's settings, or with the areas a diagnosis found. */
   async function start(areas?: { instructions: string; labels: string[]; model: Model }) {
     if (!upload?.url || !upload.preview || busy || !available) return;
     if (!areas && !canRun) return;
@@ -214,7 +214,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
       <header className="label-intro">
         <h2><ScanSearch size={22} aria-hidden /> Annotate Images</h2>
         <p>
-          Upload an image and say what to label. The Labeling agent saves it in Image Label and finds each
+          Upload an image and say what to label. The Image Annotation Agent saves it in Image Label and finds each
           object; Segment Anything (or MedSAM for medical scans) traces its exact outline. Download the
           result as COCO or YOLO training data.
         </p>
@@ -222,13 +222,14 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
 
       {!available && (
         <p className="label-alert">
-          <CircleAlert size={16} aria-hidden /> {unavailableReason ?? "The Labeling agent isn't available on this server."}
+          <CircleAlert size={16} aria-hidden /> {unavailableReason ?? "The Image Annotation Agent isn't available on this server."}
         </p>
       )}
 
       <div className="label-grid">
         <section className="label-panel" aria-labelledby="label-image-heading">
           <h3 id="label-image-heading">1. Image</h3>
+          <span className="label-source-title">Upload an image</span>
           {upload?.preview ? (
             <div className="label-picked">
               <img src={upload.preview} alt={upload.name} />
@@ -254,14 +255,16 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
               <span>JPEG, PNG, WebP, GIF or AVIF, or drag one from another web page. Large photos are resized to 1600 px.</span>
             </button>
           )}
+          <div className="label-or" role="separator" aria-label="or"><span>OR</span></div>
+          <label className="label-source-title" htmlFor="label-image-url">Image URL</label>
           <form className="label-url" onSubmit={(e) => { e.preventDefault(); addUrl(imageUrl); }}>
             <Link2 size={15} aria-hidden />
             <input
+              id="label-image-url"
               type="url"
               inputMode="url"
               value={imageUrl}
-              placeholder="…or paste an image address (https://…)"
-              aria-label="Image address"
+              placeholder="Paste an image address (https://…)"
               onChange={(e) => setImageUrl(e.target.value)}
               disabled={busy || upload?.status === "processing" || upload?.status === "uploading"}
             />
