@@ -1,8 +1,8 @@
 import { useRef, useState, type DragEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CircleAlert, Download, Eye, EyeOff, ImagePlus, LoaderCircle, RotateCcw, ScanSearch, Square, Tag } from "lucide-react";
-import { streamLabel, uploadImage, type Annotation, type LabelResult } from "../api";
+import { CircleAlert, Download, Eye, EyeOff, ImagePlus, Link2, LoaderCircle, RotateCcw, ScanSearch, Square, Tag } from "lucide-react";
+import { fetchImageFromUrl, streamLabel, uploadImage, type Annotation, type LabelResult } from "../api";
 import { applyEvent } from "../lib/events";
 import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
 import { AgentCard, type Step } from "./Messages";
@@ -44,6 +44,7 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
   const [instructions, setInstructions] = useState("");
   const [labels, setLabels] = useState("");
   const [model, setModel] = useState<"sam" | "medsam">("sam");
+  const [imageUrl, setImageUrl] = useState("");
   const [run, setRun] = useState<Run>();
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -64,10 +65,25 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
       .catch((e) => setUpload({ name: file.name, status: "error", error: (e as Error).message }));
   }
 
+  /** Load an image from a web address, then handle it like a picked file. */
+  function addUrl(raw: string) {
+    const url = raw.trim();
+    if (!url || busy) return;
+    setRun(undefined);
+    setUpload({ name: url, status: "processing" });
+    fetchImageFromUrl(url)
+      .then((file) => { setImageUrl(""); addFile(file); })
+      .catch((e) => setUpload({ name: url, status: "error", error: (e as Error).message }));
+  }
+
   function onDrop(e: DragEvent) {
     e.preventDefault();
     setDragging(false);
-    addFile(Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/")));
+    const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+    // An image dragged from another web page arrives as its address, not as a file
+    const url = e.dataTransfer.getData("text/uri-list").split(/\r?\n/).find((l) => l && !l.startsWith("#"));
+    if (file) addFile(file);
+    else if (url) addUrl(url);
   }
 
   async function start() {
@@ -149,9 +165,24 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
             >
               {upload?.status === "processing" ? <LoaderCircle size={22} className="spin" aria-hidden /> : <ImagePlus size={22} aria-hidden />}
               <strong>{upload?.status === "processing" ? "Preparing…" : "Choose or drop an image"}</strong>
-              <span>JPEG, PNG, WebP or GIF. Large photos are resized to 1600 px.</span>
+              <span>JPEG, PNG, WebP or GIF, or drag one from another web page. Large photos are resized to 1600 px.</span>
             </button>
           )}
+          <form className="label-url" onSubmit={(e) => { e.preventDefault(); addUrl(imageUrl); }}>
+            <Link2 size={15} aria-hidden />
+            <input
+              type="url"
+              inputMode="url"
+              value={imageUrl}
+              placeholder="…or paste an image address (https://…)"
+              aria-label="Image address"
+              onChange={(e) => setImageUrl(e.target.value)}
+              disabled={busy || upload?.status === "processing" || upload?.status === "uploading"}
+            />
+            <button type="submit" className="link-btn" disabled={busy || !imageUrl.trim() || upload?.status === "processing"}>
+              Load
+            </button>
+          </form>
           {upload?.status === "error" && <p className="panel-error">{upload.error}</p>}
           <input
             ref={fileRef}

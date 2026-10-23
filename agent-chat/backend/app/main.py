@@ -6,12 +6,13 @@ from collections.abc import AsyncIterable
 from typing import Literal
 
 import openai
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel, Field, field_validator
 
 from .agent import list_agents, reset_thread, run_turn
+from .image_url import ImageUrlError, download_image
 from .labeling import LabelingUnavailable, run_labeling
 from .origin import OriginSecretMiddleware
 
@@ -21,6 +22,7 @@ app.add_middleware(
     allow_origins=["http://localhost:5174"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["x-image-name"],  # /fetch-image's file name, read by the UI
 )
 # On AWS only CloudFront knows this secret; direct calls to the Lambda URL are rejected.
 if secret := os.getenv("ORIGIN_SECRET"):
@@ -64,6 +66,21 @@ class LabelRequest(BaseModel):
         if any(len(label) > 40 for label in labels):
             raise ValueError("labels must be at most 40 characters")
         return labels
+
+
+class ImageUrlRequest(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+
+
+@app.post("/fetch-image")
+async def fetch_image(req: ImageUrlRequest) -> Response:
+    """Download an image from a public web address and return its bytes (the file name is in X-Image-Name),
+    so the UI can treat it like a file the user picked."""
+    try:
+        data, media_type, name = await download_image(req.url.strip())
+    except ImageUrlError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+    return Response(data, media_type=media_type, headers={"x-image-name": name, "cache-control": "no-store"})
 
 
 @app.get("/agents")

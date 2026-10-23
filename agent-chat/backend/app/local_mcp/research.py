@@ -76,10 +76,15 @@ async def check_url(url: str) -> None:
         _check_ip(host, info[4][0])
 
 
-async def fetch(url: str, *, read_body: bool = True) -> tuple[httpx.Response, str, bytes]:
-    """GET a public URL, following redirects one checked hop at a time. Returns (response, final URL, body)."""
+async def fetch(
+    url: str, *, read_body: bool = True, max_bytes: int = MAX_BYTES, user_agent: str = USER_AGENT
+) -> tuple[httpx.Response, str, bytes]:
+    """GET a public URL, following redirects one checked hop at a time. Returns (response, final URL, body).
+
+    Reading stops after max_bytes: a body longer than max_bytes means the resource is larger.
+    """
     async with httpx.AsyncClient(
-        timeout=httpx.Timeout(12, connect=5), headers={"user-agent": USER_AGENT}, follow_redirects=False
+        timeout=httpx.Timeout(12, connect=5), headers={"user-agent": user_agent}, follow_redirects=False
     ) as client:
         for _ in range(MAX_REDIRECTS + 1):
             await check_url(url)
@@ -91,9 +96,9 @@ async def fetch(url: str, *, read_body: bool = True) -> tuple[httpx.Response, st
                 if read_body:
                     async for chunk in resp.aiter_bytes():
                         body += chunk
-                        if len(body) > MAX_BYTES:
+                        if len(body) > max_bytes:
                             break
-                return resp, url, body[:MAX_BYTES]
+                return resp, url, body[: max_bytes + 1]
     raise FetchError(f"Too many redirects from {url}")
 
 

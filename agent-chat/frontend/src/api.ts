@@ -18,6 +18,21 @@ export async function uploadImage(blob: Blob): Promise<string> {
   return body.url;
 }
 
+/** Download an image from a web address (through the agent API: browsers can't read most sites' images). */
+export async function fetchImageFromUrl(url: string): Promise<File> {
+  const res = await fetch(`${API_URL}/fetch-image`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    const detail = (await res.json().catch(() => ({}))).detail;
+    throw new Error(typeof detail === "string" ? detail : `Could not load the image (${res.status})`);
+  }
+  const blob = await res.blob();
+  return new File([blob], res.headers.get("x-image-name") ?? "image", { type: blob.type });
+}
+
 /**
  * Events streamed by the agent backend over SSE. `type` is the SSE event name.
  * agent_start/agent_end wrap each delegation from the supervisor to a specialist agent; the
