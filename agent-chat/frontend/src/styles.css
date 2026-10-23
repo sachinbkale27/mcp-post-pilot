@@ -729,3 +729,4 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 .annotate-further ol a { color: var(--accent); font-weight: 600; }
 a.label-download { text-decoration: none; }
 .label-download.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.label-report .ask-ai { margin-top: 10px; }

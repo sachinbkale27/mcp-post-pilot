@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CircleAlert, CircleCheck, Download, FlaskConical, PenTool, SquareArrowOutUpRight, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
+import { CircleAlert, CircleCheck, Download, FlaskConical, PenTool, Sparkles, SquareArrowOutUpRight, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
 import {
   fetchImageFromUrl, streamDiagnosis, streamLabel, streamPathology, uploadImage, warmUpLabeling,
   type AgentEvent, type DiagnosisRegion, type LabelResult, type PathologyAction, type QualityResult,
@@ -592,6 +592,9 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
         <details className="label-report">
           <summary>Agent's report</summary>
           <div className="answer"><Markdown remarkPlugins={[remarkGfm]}>{result.report}</Markdown></div>
+          <a className="label-download ask-ai" href="https://genetics.sachin-kale.com/" target="_blank" rel="noreferrer">
+            <Sparkles size={14} aria-hidden /> Ask AI <SquareArrowOutUpRight size={13} aria-hidden />
+          </a>
         </details>
       )}
       <p className="label-saved">
