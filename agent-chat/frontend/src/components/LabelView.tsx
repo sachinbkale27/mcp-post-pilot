@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CircleAlert, Download, Eye, EyeOff, ImagePlus, Link2, LoaderCircle, RotateCcw, ScanSearch, Square, Tag } from "lucide-react";
-import { fetchImageFromUrl, streamLabel, uploadImage, warmUpLabeling, type Annotation, type LabelResult } from "../api";
+import { CircleAlert, Download, Eye, EyeOff, ImagePlus, Link2, LoaderCircle, RotateCcw, ScanSearch, Square, Stethoscope, Tag } from "lucide-react";
+import { fetchImageFromUrl, streamDiagnosis, streamLabel, uploadImage, warmUpLabeling, type Annotation, type LabelResult } from "../api";
 import { applyEvent } from "../lib/events";
 import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
 import { AgentCard, type Step } from "./Messages";
@@ -31,6 +31,12 @@ interface Run {
   pending: boolean;
 }
 
+interface Diagnosis {
+  text: string;
+  pending: boolean;
+  error?: string;
+}
+
 interface Props {
   active: boolean;      // the view is showing
   available: boolean;   // the Labeling agent is configured and online
@@ -46,6 +52,8 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
   const [labels, setLabels] = useState("");
   const [model, setModel] = useState<"sam" | "medsam">("sam");
   const [imageUrl, setImageUrl] = useState("");
+  const [diagnosis, setDiagnosis] = useState<Diagnosis>();
+  const diagnoseAbort = useRef<AbortController | null>(null);
   const [run, setRun] = useState<Run>();
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -65,6 +73,8 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
   function addFile(file: File | undefined) {
     if (!file || busy) return;
     setRun(undefined);
+    diagnoseAbort.current?.abort();
+    setDiagnosis(undefined);
     setUpload({ name: file.name, status: "processing" });
     prepareImage(file)
       .then(async ({ blob, dataUrl }) => {
@@ -129,8 +139,30 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
   }
 
   function reset() {
+    diagnoseAbort.current?.abort();
     setUpload(undefined);
     setRun(undefined);
+    setDiagnosis(undefined);
+  }
+
+  /** Stream an AI interpretation of the image; "What to label" is passed along as context. */
+  async function diagnose() {
+    if (!upload?.url || !upload.preview || diagnosis?.pending) return;
+    const controller = new AbortController();
+    diagnoseAbort.current = controller;
+    setDiagnosis({ text: "", pending: true });
+    try {
+      const request = { image: { url: upload.url, data_url: upload.preview, name: upload.name }, context: instructions };
+      for await (const event of streamDiagnosis(request, controller.signal)) {
+        if (event.type === "token") setDiagnosis((d) => d && { ...d, text: d.text + event.text });
+        else if (event.type === "error") setDiagnosis((d) => d && { ...d, error: event.message });
+      }
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") setDiagnosis((d) => d && { ...d, error: (e as Error).message });
+    } finally {
+      setDiagnosis((d) => d && { ...d, pending: false });
+      diagnoseAbort.current = null;
+    }
   }
 
   return (
@@ -253,7 +285,16 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
                 <ScanSearch size={16} aria-hidden /> Annotate Image
               </button>
             )}
-            {run && !busy && (
+            {diagnosis?.pending ? (
+              <button className="label-secondary" onClick={() => diagnoseAbort.current?.abort()}>
+                <Square size={14} aria-hidden /> Stop
+              </button>
+            ) : (
+              <button className="label-secondary" onClick={diagnose} disabled={upload?.status !== "ready"} title="AI interpretation of the image (research and education, not a medical diagnosis)">
+                <Stethoscope size={16} aria-hidden /> Diagnose
+              </button>
+            )}
+            {(run || diagnosis) && !busy && !diagnosis?.pending && (
               <button className="link-btn" onClick={reset}><RotateCcw size={13} aria-hidden /> Start over</button>
             )}
           </div>
@@ -261,7 +302,25 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
 
         <section className="label-panel label-output" aria-live="polite" aria-labelledby="label-result-heading">
           <h3 id="label-result-heading">3. Result</h3>
-          {!run && <p className="label-empty">The annotated image appears here. Labeling usually takes 10 to 30 seconds.</p>}
+          {diagnosis && (
+            <section className="diagnosis" aria-labelledby="diagnosis-heading">
+              <h4 id="diagnosis-heading">
+                <Stethoscope size={15} aria-hidden /> AI interpretation
+                {diagnosis.pending && <LoaderCircle size={14} className="spin" aria-label="Writing" />}
+              </h4>
+              <p className="diagnosis-notice">
+                For research and education only: not a medical diagnosis. A single image, without the patient's
+                history, is never enough to diagnose; a qualified clinician must review it.
+              </p>
+              {diagnosis.text ? (
+                <div className="answer"><Markdown remarkPlugins={[remarkGfm]}>{diagnosis.text}</Markdown></div>
+              ) : (
+                diagnosis.pending && <p className="label-empty">Looking at the image…</p>
+              )}
+              {diagnosis.error && <p className="label-alert"><CircleAlert size={16} aria-hidden /> {diagnosis.error}</p>}
+            </section>
+          )}
+          {!run && !diagnosis && <p className="label-empty">The annotated image appears here. Labeling usually takes 10 to 30 seconds.</p>}
           {run?.steps.map((step) => (step.type === "agent" ? <AgentCard key={step.id} step={step} /> : null))}
           {run?.pending && !run.steps.length && (
             <p className="label-empty"><LoaderCircle size={14} className="spin" aria-hidden /> Starting…</p>

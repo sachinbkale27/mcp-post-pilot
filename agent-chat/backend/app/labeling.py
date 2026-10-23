@@ -29,8 +29,19 @@ What to label: {instructions}
 Look at the image, then outline every object to label with one segment_objects call on image {image_id}
 (model "{model}"): give each a rough box that contains the whole object, a little loose rather than tight;
 the segmentation model traces the exact edges. If segment_objects fails, or fails for some objects, draw
-those yourself with add_annotations (polygons, confidence "low") and say so. Report what you labeled, the
-scores, and anything you were unsure about."""
+those yourself with add_annotations (polygons, confidence "low") and say so.
+
+Label names: unless label names are given above, name each object with a specific, descriptive term for
+what it is, never the wording of the request: e.g. "car", "pedestrian", or for medical images standard
+morphological terms such as "pigment-laden macrophage", "atypical cell cluster", "necrosis", "stroma",
+"lymphocytic infiltrate". Reuse a name for objects of the same kind. Don't use diagnoses as labels.
+
+Report what you labeled, the scores, and anything you were unsure about.{medical}"""
+
+MEDICAL = """ For this medical image, end the report
+with a short "Possible interpretation" section: the pattern you see and the most likely explanations,
+stated as hypotheses, with what would confirm them (e.g. special stains, immunohistochemistry). It is for
+research and dataset building, not a diagnosis."""
 
 
 GRID = """The attached copy has a yellow grid drawn on it, with lines every {step} pixels labelled with their
@@ -121,6 +132,7 @@ async def run_labeling(
                     labels=label_line,
                     grid=GRID.format(step=grid_step) if grid_step else "",
                     model=model,
+                    medical=MEDICAL if model == "medsam" else "",
                 ),
                 user_text=instructions,
                 images=[image],

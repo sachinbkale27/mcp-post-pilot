@@ -56,6 +56,7 @@ async def test_uploads_annotates_and_returns_the_saved_result(label_server):
     assert upload == ("upload_image_from_url", {"url": "https://blog.example/media/abc.webp", "name": "cats.webp", "category": "pets"})
     task = next(t for name, t in label_server if name == "agent")
     assert "img-1 (200 x 100 pixels)" in task and "Circle every cat" in task and "cat, dog" in task
+    assert "Possible interpretation" in task and "never the wording of the request" in task
     assert "lines every 50 pixels" in task and 'segment_objects call on image img-1\n(model "medsam")' in task
 
     types = [e["type"] for e in events]

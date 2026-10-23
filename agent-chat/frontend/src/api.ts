@@ -143,6 +143,11 @@ export function streamLabel(
   return streamEvents("/label", request, signal);
 }
 
+/** Stream an AI interpretation of one image (token events; research and education, not a diagnosis). */
+export function streamDiagnosis(request: { image: ChatImage; context: string }, signal: AbortSignal): AsyncGenerator<AgentEvent> {
+  return streamEvents("/diagnose", request, signal);
+}
+
 /**
  * The browser's EventSource only supports GET, so we read the SSE stream with fetch()
  * and parse the wire format ourselves: events are separated by a blank line, and each

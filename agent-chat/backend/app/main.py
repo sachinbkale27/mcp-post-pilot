@@ -12,6 +12,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel, Field, field_validator
 
 from .agent import list_agents, reset_thread, run_turn
+from .diagnose import run_diagnosis
 from .image_url import ImageUrlError, download_image
 from .labeling import LabelingUnavailable, run_labeling, warm_up
 from .origin import OriginSecretMiddleware
@@ -116,6 +117,22 @@ async def chat(req: ChatRequest) -> AsyncIterable[ServerSentEvent]:
 
 class WarmupRequest(BaseModel):
     model: Literal["sam", "medsam"] = "sam"
+
+
+class DiagnoseRequest(BaseModel):
+    image: ChatImage
+    context: str = Field(default="", max_length=2000)
+
+
+@app.post("/diagnose", response_class=EventSourceResponse)
+async def diagnose(req: DiagnoseRequest) -> AsyncIterable[ServerSentEvent]:
+    """Stream an AI interpretation of one image (research and education, not a diagnosis)."""
+    try:
+        async for event in run_diagnosis(req.image.model_dump(), req.context):
+            yield _sse(event)
+    except Exception as exc:
+        yield _sse({"type": "error", "message": _error_message(exc)})
+    yield _sse({"type": "done"})
 
 
 @app.post("/label/warmup")
