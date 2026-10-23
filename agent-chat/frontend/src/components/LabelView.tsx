@@ -181,8 +181,9 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
       setModel(areaModel);
       start({
         instructions:
-          "Outline the problematic regions behind these findings: every clear example of each (up to 20 in all), " +
-          "the main abnormal area first. Put each finding's significance in the annotation notes.\n" +
+          "Outline the problematic regions behind these findings. For each finding, outline several clear " +
+          "examples spread over the image (at least 3 when there are many, up to 20 outlines in all), each box " +
+          "tight around one example. Put each finding's significance in the annotation notes.\n" +
           found.regions.map((r) => `- ${r.label}: ${r.description}. Significance: ${r.significance}`).join("\n"),
         labels: found.regions.map((r) => r.label),
         model: areaModel,

@@ -61,7 +61,7 @@ async def run_diagnosis(image: dict[str, str], context: str = "") -> AsyncIterat
             answer.append(chunk.text)
             yield {"type": "token", "text": chunk.text}
     try:
-        found = await extract_regions("".join(answer))
+        found = await extract_regions("".join(answer), image["data_url"])
     except Exception:  # the interpretation is already shown; just nothing to outline
         return
     yield {"type": "diagnosis_regions", "medical": found.medical, "regions": [r.model_dump() for r in found.regions[:6]]}
@@ -71,8 +71,11 @@ REGIONS_PROMPT = """From this image interpretation, list the problematic regions
 abnormal or concerning findings a pathologist or radiologist would point at, most important first, at most
 6 kinds. Name each with precise medical terminology for the finding (e.g. "atypical melanocytes",
 "melanophages (pigment-laden macrophages)", "sheet of atypical epithelioid cells", "tumour necrosis",
-"atypical mitotic figure", "haemorrhage", "spiculated mass", "pleural effusion"). Don't list normal tissue,
-background, stroma or general cell shapes, and leave out absences (e.g. "no necrosis"). If the
+"atypical mitotic figure", "haemorrhage", "spiculated mass", "pleural effusion"). Each must be a concrete thing
+you can draw a line around in this image: a kind of cell, deposit, structure or area. Never a property or
+pattern of the whole tissue (not "pleomorphism", "minimal matrix", "growth pattern", "crowded cells"):
+outline the cells or area that show it instead. Don't list normal tissue, background or stroma, and leave
+out absences (e.g. "no necrosis"). Check each against the image: only list what is clearly visible. If the
 interpretation names a leading diagnosis, put it in significance, as what the finding suggests, not in
 the label. For an image that isn't medical, list the main objects instead."""
 
@@ -88,6 +91,13 @@ class Regions(BaseModel):
     regions: list[Region] = Field(description="At most 6 kinds, most important first")
 
 
-async def extract_regions(interpretation: str) -> Regions:
+async def extract_regions(interpretation: str, image_data_url: str) -> Regions:
+    """The problematic regions, chosen from the interpretation and checked against the image itself."""
     model = _model().with_structured_output(Regions)
-    return await model.ainvoke([SystemMessage(REGIONS_PROMPT), HumanMessage(interpretation)])
+    message = HumanMessage(
+        [
+            {"type": "text", "text": f"Interpretation of the attached image:\n\n{interpretation}"},
+            {"type": "image_url", "image_url": {"url": image_data_url, "detail": "high"}},
+        ]
+    )
+    return await model.ainvoke([SystemMessage(REGIONS_PROMPT), message])

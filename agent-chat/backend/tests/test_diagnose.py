@@ -24,8 +24,9 @@ def test_streams_the_interpretation_with_the_image_and_context(monkeypatch):
     monkeypatch.setattr(diagnose, "_model", lambda **kwargs: model)
     seen = []
 
-    async def fake_regions(text):
+    async def fake_regions(text, image_data_url):
         seen.append(text)
+        assert image_data_url == IMAGE["data_url"]
         return Regions(medical=True, regions=[Region(label="melanophage", description="cells packed with brown pigment", significance="melanin in a melanocytic lesion")])
 
     monkeypatch.setattr(diagnose, "extract_regions", fake_regions)
