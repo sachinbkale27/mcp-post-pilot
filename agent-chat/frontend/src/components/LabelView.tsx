@@ -1,23 +1,21 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CircleAlert, CircleCheck, Download, Eye, EyeOff, FlaskConical, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
+import { CircleAlert, CircleCheck, Download, FlaskConical, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
 import {
   fetchImageFromUrl, streamDiagnosis, streamLabel, streamPathology, uploadImage, warmUpLabeling,
-  type AgentEvent, type Annotation, type DiagnosisRegion, type LabelResult, type PathologyAction, type QualityResult,
+  type AgentEvent, type DiagnosisRegion, type LabelResult, type PathologyAction, type QualityResult,
 } from "../api";
 import { applyEvent } from "../lib/events";
 import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
 import { AgentCard, type Step } from "./Messages";
+import { AnnotatedImage, layerOf } from "./AnnotationLayers";
 
 const EXAMPLES = [
   { instructions: "Outline every person and every car.", labels: "person, car" },
   { instructions: "Circle each coin and outline the banknotes.", labels: "coin, banknote" },
   { instructions: "Outline the main object in the photo.", labels: "" },
 ];
-
-// Distinct colours on both the dark and light themes
-const PALETTE = ["#2dd4bf", "#f59e0b", "#a78bfa", "#f43f5e", "#38bdf8", "#84cc16", "#ec4899", "#fb923c"];
 
 interface Upload {
   name: string;
@@ -516,41 +514,15 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
 }
 
 function LabelResultView({ result, image, name }: { result: LabelResult; image: string; name: string }) {
-  const labelNames = [...new Set(result.annotations.map((a) => a.label))];
-  const colorOf = (label: string) => PALETTE[labelNames.indexOf(label) % PALETTE.length];
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const [showText, setShowText] = useState(result.annotations.length <= 40); // hundreds of nuclei would bury the image
   const nuclei = result.nuclei_summary;
-  const visible = result.annotations.filter((a) => !hidden.has(a.label));
-  const toggle = (label: string) =>
-    setHidden((h) => { const next = new Set(h); next.has(label) ? next.delete(label) : next.add(label); return next; });
   const exportable = result.annotations.filter((a) => a.type === "polygon" || a.type === "circle").length;
   const base = name.replace(/\.[^.]+$/, "") || "image";
+  const hasNuclei = result.annotations.some((a) => layerOf(a) === "nuclei");
+  const hasOutlines = result.annotations.some((a) => layerOf(a) !== "nuclei");
 
   return (
     <div className="label-result">
-      <div className="label-canvas">
-        <img src={image} alt={`${name} with ${result.annotations.length} annotations`} />
-        <svg viewBox={`0 0 ${result.width} ${result.height}`} preserveAspectRatio="none" aria-hidden>
-          {visible.map((a) => (
-            <Shape key={a.id} annotation={a} color={colorOf(a.label)} size={Math.max(result.width, result.height)} showText={showText} />
-          ))}
-        </svg>
-      </div>
-
-      <div className="label-legend">
-        {labelNames.map((label) => {
-          const count = result.annotations.filter((a) => a.label === label).length;
-          return (
-            <button key={label} className={hidden.has(label) ? "legend-item off" : "legend-item"} onClick={() => toggle(label)} aria-pressed={!hidden.has(label)}>
-              <span className="legend-swatch" style={{ background: colorOf(label) }} /> {label} <span className="count">{count}</span>
-            </button>
-          );
-        })}
-        <button className="link-btn legend-text" onClick={() => setShowText(!showText)}>
-          {showText ? <EyeOff size={13} aria-hidden /> : <Eye size={13} aria-hidden />} {showText ? "Hide" : "Show"} names
-        </button>
-      </div>
+      <AnnotatedImage annotations={result.annotations} image={image} name={name} width={result.width} height={result.height} />
 
       {nuclei && (
         <p className="nuclei-summary">
@@ -565,15 +537,12 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
       )}
       {result.annotations.length === 0 ? (
         <p className="label-alert"><CircleAlert size={16} aria-hidden /> {nuclei ? "No nuclei were found. Is this an H&E-stained tissue image?" : "The agent saved no annotations. Try more specific instructions."}</p>
-      ) : nuclei ? (
-        <p className="label-note">
-          Nuclei are found automatically by StarDist, a model trained on H&E slides. These are measurements for research
-          and datasets, not a diagnosis.
-        </p>
       ) : (
         <p className="label-note">
-          Outlines are traced by Segment Anything from the agent's boxes; dashed ones scored low. Check that each
-          outline is the right object before you train on it. {exportable < result.annotations.length && `${result.annotations.length - exportable} pin, arrow or rectangle shapes are left out of exports.`}
+          {hasOutlines && "Outlines are traced by Segment Anything from the agent's boxes; dashed ones scored low. Check that each outline is the right object before you train on it. "}
+          {hasNuclei && "Nuclei are found automatically by StarDist, a model trained on H&E slides: measurements for research and datasets, not a diagnosis. "}
+          Hover over a legend row to pick out its shapes; click it to hide them.
+          {exportable < result.annotations.length && ` ${result.annotations.length - exportable} pin, arrow or rectangle shapes are left out of exports.`}
         </p>
       )}
 
@@ -606,49 +575,6 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
         <span className="mono">{result.image_id}</span> (in the shared agent account).
       </p>
     </div>
-  );
-}
-
-function Shape({ annotation: a, color, size, showText }: { annotation: Annotation; color: string; size: number; showText: boolean }) {
-  const stroke = Math.max(2, size / 300);
-  const style = {
-    stroke: color,
-    strokeWidth: stroke,
-    fill: a.type === "arrow" ? "none" : `${color}33`,
-    strokeDasharray: a.confidence === "low" ? `${stroke * 3} ${stroke * 2}` : undefined,
-  };
-  const fontSize = Math.max(12, size / 40);
-  let shape;
-  let anchor = { x: a.x ?? 0, y: a.y ?? 0 };
-  switch (a.type) {
-    case "polygon":
-      shape = <polygon points={(a.points ?? []).map((p) => `${p.x},${p.y}`).join(" ")} {...style} />;
-      anchor = (a.points ?? []).reduce((top, p) => (p.y < top.y ? p : top), a.points?.[0] ?? anchor);
-      break;
-    case "circle":
-      shape = <circle cx={a.x} cy={a.y} r={a.radius} {...style} />;
-      anchor = { x: a.x ?? 0, y: (a.y ?? 0) - (a.radius ?? 0) };
-      break;
-    case "rectangle":
-      shape = <rect x={a.x} y={a.y} width={a.width} height={a.height} {...style} />;
-      break;
-    case "pin":
-      shape = <circle cx={a.x} cy={a.y} r={stroke * 3} {...style} fill={color} />;
-      break;
-    case "arrow":
-      shape = <line x1={a.x} y1={a.y} x2={a.arrowTarget?.x} y2={a.arrowTarget?.y} {...style} />;
-      break;
-  }
-  return (
-    <g>
-      <title>{`${a.label}${a.confidence ? ` (${a.confidence} confidence)` : ""}${a.notes ? `: ${a.notes}` : ""}`}</title>
-      {shape}
-      {showText && (
-        <text x={anchor.x} y={Math.max(fontSize, anchor.y - stroke * 2)} fontSize={fontSize} fill={color} className="shape-label">
-          {a.label}
-        </text>
-      )}
-    </g>
   );
 }
 

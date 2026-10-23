@@ -677,3 +677,32 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 .quality-good { border-left-color: var(--ok); } .quality-good h4 svg { color: var(--ok); }
 .quality-check { border-left-color: #d97706; } .quality-check h4 svg { color: #d97706; }
 .quality-poor { border-left-color: var(--danger); } .quality-poor h4 svg { color: var(--danger); }
+
+/* ---- annotation layers and legend ---- */
+.shape-badge text { fill: #0b1020; font-weight: 700; font-family: var(--font-ui); pointer-events: none; }
+.shape-badge circle { stroke: #fff; stroke-width: 1.5; }
+.legend { display: grid; gap: 10px; }
+.legend-group { display: grid; gap: 6px; }
+.legend-group-head {
+  display: flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--text-3); font: 600 11px/1.2 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.legend-group-head .count { margin-left: 2px; font-variant-numeric: tabular-nums; }
+.legend-group-head[aria-pressed="false"] { opacity: 0.5; }
+.legend-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); grid-auto-rows: 1fr; gap: 6px; }
+.legend-row {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2); color: var(--text); font: 13px/1.3 var(--font-ui);
+  text-align: left; cursor: pointer;
+}
+.legend-row:hover, .legend-row:focus-visible { border-color: var(--accent); }
+.legend-row.off { opacity: 0.45; }
+.legend-row.off .legend-name { text-decoration: line-through; }
+.legend-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.legend-row .count { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.legend-badge {
+  display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  color: #0b1020; font-size: 11px; font-weight: 700;
+}
+.legend-badge.ring { box-sizing: border-box; border: 2.5px solid; background: none; }
+.legend .legend-text { justify-self: start; }
