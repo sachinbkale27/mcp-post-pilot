@@ -242,7 +242,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     const significance = new Map((diagnosis?.regions ?? []).map((r) => [r.label, r.significance]));
     try {
       const url = await handOffResults({
-        image_url: upload?.url?.startsWith("/") && BLOG_URL.startsWith("https://") ? `${BLOG_URL}${upload.url}` : undefined,
+        image_url: upload?.url?.startsWith("/") && BLOG_URL.startsWith("https://") ? `${BLOG_URL.replace(/\/+$/, "")}${upload.url}` : undefined,
         image_name: (upload?.name ?? "").slice(0, 200),
         suspected_diagnosis: (diagnosis?.suspected ?? "").slice(0, 200),
         findings: [...counts].slice(0, 20).map(([label, count]) => ({ label: label.slice(0, 120), count, significance: (significance.get(label) ?? "").slice(0, 400) })),
