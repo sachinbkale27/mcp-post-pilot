@@ -58,3 +58,12 @@ def test_errors_end_the_stream_cleanly(monkeypatch):
     with TestClient(main.app) as client:
         body = client.post("/diagnose", json={"image": IMAGE}).text
     assert "event: error" in body and "model down" in body and "event: done" in body
+
+
+def test_short_label_keeps_short_terms_and_trims_long_ones():
+    from app.diagnose import short_label
+
+    assert short_label("melanophages (pigment-laden macrophages)") == "melanophages (pigment-laden macrophages)"
+    long = "sheets of atypical epithelioid cells (with prominent nucleoli and abundant eosinophilic cytoplasm)"
+    assert short_label(long) == "sheets of atypical epithelioid cells"
+    assert len(short_label("word " * 30)) <= 70

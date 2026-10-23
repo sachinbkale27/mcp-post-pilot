@@ -89,3 +89,16 @@ async def test_warm_up_is_best_effort(label_server, monkeypatch):
 
     monkeypatch.setattr(labeling, "call_mcp_tool", offline)
     assert await labeling.warm_up("sam") is False
+
+
+def test_label_request_accepts_long_medical_terms():
+    import pytest
+    from pydantic import ValidationError
+
+    from app.main import LabelRequest
+
+    image = {"url": "/media/a.png", "data_url": "data:image/png;base64,AAAA"}
+    req = LabelRequest(image=image, instructions="Outline it", labels=["Suspected invasive ductal carcinoma (AI)x"])
+    assert len(req.labels[0]) == 41
+    with pytest.raises(ValidationError, match="at most 80"):
+        LabelRequest(image=image, instructions="Outline it", labels=["x" * 81])

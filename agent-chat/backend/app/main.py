@@ -52,6 +52,9 @@ class ChatRequest(BaseModel):
     images: list[ChatImage] = Field(default_factory=list, max_length=4)
 
 
+MAX_LABEL = 80  # medical terms run long, e.g. "melanophages (pigment-laden macrophages)"
+
+
 class LabelRequest(BaseModel):
     image: ChatImage
     instructions: str = Field(min_length=3, max_length=2000)
@@ -64,8 +67,9 @@ class LabelRequest(BaseModel):
     @classmethod
     def _clean_labels(cls, value: list[str]) -> list[str]:
         labels = list(dict.fromkeys(label.strip() for label in value if label.strip()))
-        if any(len(label) > 40 for label in labels):
-            raise ValueError("labels must be at most 40 characters")
+        for label in labels:
+            if len(label) > MAX_LABEL:
+                raise ValueError(f"label names must be at most {MAX_LABEL} characters: {label!r} is {len(label)}")
         return labels
 
 

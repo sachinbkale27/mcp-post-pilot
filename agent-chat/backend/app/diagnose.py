@@ -8,6 +8,7 @@ A second, small call then turns the interpretation into the areas to outline (a 
 event); the UI hands those to the Labeling agent, so the findings are shown on the image.
 """
 
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -67,8 +68,8 @@ async def run_diagnosis(image: dict[str, str], context: str = "") -> AsyncIterat
     yield {
         "type": "diagnosis_regions",
         "medical": found.medical,
-        "regions": [r.model_dump() for r in found.regions[:6]],
-        "diagnosis": found.leading_diagnosis.strip() if found.medical else "",
+        "regions": [{**r.model_dump(), "label": short_label(r.label)} for r in found.regions[:6]],
+        "diagnosis": short_label(found.leading_diagnosis, 60) if found.medical else "",
         "lesion_area": found.lesion_area.strip(),
     }
 
@@ -88,8 +89,18 @@ diagnosis in standard pathological or radiological terms (e.g. "melanoma", "inva
 outline for it. For an image that isn't medical, list the main objects instead."""
 
 
+def short_label(text: str, limit: int = 70) -> str:
+    """A label that fits the annotation tool: drop a parenthetical gloss, then cut at a word."""
+    text = " ".join(text.split())
+    if len(text) > limit:
+        text = re.sub(r"\s*\([^)]*\)", "", text).strip() or text
+    if len(text) > limit:
+        text = text[:limit].rsplit(" ", 1)[0].rstrip(",;:-")
+    return text
+
+
 class Region(BaseModel):
-    label: str = Field(description="Medical term for the finding, used as the annotation label")
+    label: str = Field(description="Medical term for the finding, used as the annotation label (under 50 characters)")
     description: str = Field(description="How to recognise it in the image: appearance, colour, location")
     significance: str = Field(description="Why it is concerning, or what it suggests (one short sentence)")
 
