@@ -169,22 +169,26 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
           <h3 id="trials-form-heading">1. What are you looking for?</h3>
           <small className="label-hint">Only the condition is required; every detail you add narrows the search.</small>
           <label className="label-field">
-            <span>Condition</span>
-            <input className="label-input" value={form.condition} placeholder="e.g. breast cancer, type 2 diabetes, melanoma"
+            <span>Disease or condition</span>
+            <input className="label-input" value={form.condition} placeholder="e.g. breast cancer, type 2 diabetes, asthma"
               onChange={(e) => set({ condition: e.target.value })} disabled={busy} />
           </label>
-          <div className="trials-row">
-            <label className="label-field">
-              <span>Biomarker or mutation</span>
-              <input className="label-input" value={form.biomarker} placeholder="e.g. HER2-low, EGFR, BRAF V600E"
-                onChange={(e) => set({ biomarker: e.target.value })} disabled={busy} />
-            </label>
-            <label className="label-field">
-              <span>Drug or treatment</span>
-              <input className="label-input" value={form.drug} placeholder="e.g. pembrolizumab"
-                onChange={(e) => set({ drug: e.target.value })} disabled={busy} />
-            </label>
-          </div>
+          <label className="label-field">
+            <span>Test result or gene change <em>(if known)</em></span>
+            <input className="label-input" value={form.biomarker} placeholder="e.g. HER2-positive, EGFR, BRAF V600E"
+              aria-describedby="trials-biomarker-help" onChange={(e) => set({ biomarker: e.target.value })} disabled={busy} />
+            <small id="trials-biomarker-help" className="label-hint">
+              Some diseases, especially cancers, are split into types by a lab test on the tumour or blood, and many
+              trials only take one type. You'll find it on the pathology or genetic test report (it may be called a
+              biomarker or mutation). Leave it blank if you're not sure.
+            </small>
+          </label>
+          <label className="label-field">
+            <span>A treatment you're interested in <em>(optional)</em></span>
+            <input className="label-input" value={form.drug} placeholder="e.g. immunotherapy, pembrolizumab, a vaccine"
+              aria-describedby="trials-drug-help" onChange={(e) => set({ drug: e.target.value })} disabled={busy} />
+            <small id="trials-drug-help" className="label-hint">Only trials testing this treatment. Leave blank to see all.</small>
+          </label>
 
           <h3>2. Where?</h3>
           <div className="trials-row">
