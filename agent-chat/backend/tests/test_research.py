@@ -137,3 +137,5 @@ def test_quote_matching_ignores_case_punctuation_and_dashes():
     assert quote_found("Approximately 70 % ... CF alleles", PAGE.replace("70%", "70 %"))
     assert quote_found("1,480–amino acid protein", "normally 1,480-amino acid protein")
     assert not quote_found("70%", PAGE)  # too short to be evidence
+    assert quote_found('The paper states, "approximately 70% of the CF alleles" in its intro', PAGE)
+    assert not quote_found('The paper states, "70% of all CF patients worldwide"', PAGE)

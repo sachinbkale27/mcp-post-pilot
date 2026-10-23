@@ -316,9 +316,16 @@ def _normalize(text: str) -> str:
     return " ".join(re.findall(r"[a-z0-9%]+(?:[.,][0-9]+)?", text))
 
 
+QUOTED = re.compile(r'"([^"]+)"|\u201c([^\u201d]+)\u201d')
+
+
 def quote_found(quote: str, page: str) -> bool:
-    """Whether every part of the quote (parts split at ellipses) appears on the page, ignoring case and punctuation."""
-    parts = [_normalize(p) for p in re.split(r"\.\.\.|\u2026", quote)]
+    """Whether every part of the quote (parts split at ellipses) appears on the page, ignoring case and punctuation.
+
+    When the evidence has quotation marks (The paper says, "..."), only the quoted text has to match.
+    """
+    quoted = [a or b for a, b in QUOTED.findall(quote)]
+    parts = [_normalize(p) for q in (quoted or [quote]) for p in re.split(r"\.\.\.|\u2026", q)]
     parts = [p for p in parts if p]
     normalized = _normalize(page)
     return sum(len(p) for p in parts) >= 15 and all(p in normalized for p in parts)
