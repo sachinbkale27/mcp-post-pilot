@@ -1,7 +1,8 @@
 /** Shrink an image in the browser before upload: smaller files, faster uploads, cheaper vision. */
 
 const MAX_SIDE = 1600;
-export const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+// The browser decodes these and the image is re-encoded below, so AVIF and BMP work too
+export const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/bmp"];
 
 export interface PreparedImage {
   blob: Blob;
@@ -22,8 +23,10 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 export async function prepareImage(file: File): Promise<PreparedImage> {
-  if (!ACCEPTED_TYPES.includes(file.type)) throw new Error("Use a JPEG, PNG, WebP or GIF image");
-  const bitmap = await createImageBitmap(file);
+  if (!ACCEPTED_TYPES.includes(file.type)) throw new Error("Use a JPEG, PNG, WebP, GIF, AVIF or BMP image");
+  const bitmap = await createImageBitmap(file).catch(() => {
+    throw new Error("This browser can't read that image. Try a JPEG or PNG.");
+  });
   const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * scale);

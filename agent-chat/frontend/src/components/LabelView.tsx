@@ -1,8 +1,8 @@
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CircleAlert, Download, Eye, EyeOff, ImagePlus, Link2, LoaderCircle, RotateCcw, ScanSearch, Square, Tag } from "lucide-react";
-import { fetchImageFromUrl, streamLabel, uploadImage, type Annotation, type LabelResult } from "../api";
+import { fetchImageFromUrl, streamLabel, uploadImage, warmUpLabeling, type Annotation, type LabelResult } from "../api";
 import { applyEvent } from "../lib/events";
 import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
 import { AgentCard, type Step } from "./Messages";
@@ -32,6 +32,7 @@ interface Run {
 }
 
 interface Props {
+  active: boolean;      // the view is showing
   available: boolean;   // the Labeling agent is configured and online
   unavailableReason?: string;
   busy: boolean;
@@ -39,7 +40,7 @@ interface Props {
 }
 
 /** Upload an image, say what to label, and watch the Labeling agent annotate it. */
-export function LabelView({ available, unavailableReason, busy, onBusyChange }: Props) {
+export function LabelView({ active, available, unavailableReason, busy, onBusyChange }: Props) {
   const [upload, setUpload] = useState<Upload>();
   const [instructions, setInstructions] = useState("");
   const [labels, setLabels] = useState("");
@@ -49,6 +50,15 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // The segmentation model takes a minute or two to start after a quiet spell: start it while the
+  // user picks an image and writes instructions (again every few minutes while the view is open)
+  useEffect(() => {
+    if (!active || !available) return;
+    warmUpLabeling(model);
+    const timer = setInterval(() => warmUpLabeling(model), 4 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, [active, available, model]);
 
   const canRun = available && !busy && upload?.status === "ready" && instructions.trim().length >= 3;
 
@@ -165,7 +175,7 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
             >
               {upload?.status === "processing" ? <LoaderCircle size={22} className="spin" aria-hidden /> : <ImagePlus size={22} aria-hidden />}
               <strong>{upload?.status === "processing" ? "Preparing…" : "Choose or drop an image"}</strong>
-              <span>JPEG, PNG, WebP or GIF, or drag one from another web page. Large photos are resized to 1600 px.</span>
+              <span>JPEG, PNG, WebP, GIF or AVIF, or drag one from another web page. Large photos are resized to 1600 px.</span>
             </button>
           )}
           <form className="label-url" onSubmit={(e) => { e.preventDefault(); addUrl(imageUrl); }}>

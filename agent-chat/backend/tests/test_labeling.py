@@ -28,6 +28,7 @@ def label_server(monkeypatch):
     async def fake_call(mcp, name, arguments):
         calls.append((name, arguments))
         results = {
+            "warm_up_segmentation": {"warming": "sam"},
             "upload_image_from_url": {"imageId": "img-1", "width": 200, "height": 100},
             "get_image": {"imageId": "img-1", "width": 200, "height": 100, "annotations": SAVED},
             "export_annotations": {"result": "coco-json"} if arguments.get("format") == "coco" else {"classes": ["cat"], "annotations": "0 0.25 0.4 0.2 0.4"},
@@ -50,7 +51,8 @@ def label_server(monkeypatch):
 async def test_uploads_annotates_and_returns_the_saved_result(label_server):
     events = [e async for e in labeling.run_labeling(IMAGE, "Circle every cat", ["cat", "dog"], "pets", 50, "medsam")]
 
-    upload = label_server[0]
+    assert ("warm_up_segmentation", {"model": "medsam"}) in label_server
+    upload = next(c for c in label_server if c[0] == "upload_image_from_url")
     assert upload == ("upload_image_from_url", {"url": "https://blog.example/media/abc.webp", "name": "cats.webp", "category": "pets"})
     task = next(t for name, t in label_server if name == "agent")
     assert "img-1 (200 x 100 pixels)" in task and "Circle every cat" in task and "cat, dog" in task
@@ -76,3 +78,13 @@ def test_endpoint_validates_the_request():
     with TestClient(main.app) as client:
         assert client.post("/label", json={"image": {**IMAGE, "url": "https://evil.example/x.png"}, "instructions": "x y z"}).status_code == 422
         assert client.post("/label", json={"image": IMAGE, "instructions": "go", "labels": ["x" * 41]}).status_code == 422
+
+
+async def test_warm_up_is_best_effort(label_server, monkeypatch):
+    assert await labeling.warm_up("sam") is True
+
+    async def offline(mcp, name, arguments):
+        raise ConnectionError("label server down")
+
+    monkeypatch.setattr(labeling, "call_mcp_tool", offline)
+    assert await labeling.warm_up("sam") is False

@@ -18,6 +18,15 @@ export async function uploadImage(blob: Blob): Promise<string> {
   return body.url;
 }
 
+/** Start loading the segmentation model (best effort; it takes a minute or two after a quiet spell). */
+export function warmUpLabeling(model: "sam" | "medsam" = "sam") {
+  fetch(`${API_URL}/label/warmup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model }),
+  }).catch(() => {});
+}
+
 /** Download an image from a web address (through the agent API: browsers can't read most sites' images). */
 export async function fetchImageFromUrl(url: string): Promise<File> {
   const res = await fetch(`${API_URL}/fetch-image`, {

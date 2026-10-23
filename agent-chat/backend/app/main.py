@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .agent import list_agents, reset_thread, run_turn
 from .image_url import ImageUrlError, download_image
-from .labeling import LabelingUnavailable, run_labeling
+from .labeling import LabelingUnavailable, run_labeling, warm_up
 from .origin import OriginSecretMiddleware
 
 app = FastAPI(title="MCP Agent Chat")
@@ -112,6 +112,16 @@ async def chat(req: ChatRequest) -> AsyncIterable[ServerSentEvent]:
     except Exception as exc:
         yield _sse({"type": "error", "message": _error_message(exc)})
     yield _sse({"type": "done"})
+
+
+class WarmupRequest(BaseModel):
+    model: Literal["sam", "medsam"] = "sam"
+
+
+@app.post("/label/warmup")
+async def label_warmup(req: WarmupRequest):
+    """Start loading the segmentation model, so it is ready by the time someone labels an image."""
+    return {"warming": await warm_up(req.model)}
 
 
 @app.post("/label", response_class=EventSourceResponse)

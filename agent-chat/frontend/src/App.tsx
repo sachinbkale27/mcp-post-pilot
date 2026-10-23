@@ -172,6 +172,7 @@ export function App() {
         {/* Both views stay mounted, so switching doesn't lose a conversation or a labeling run */}
         <div className="scroll" hidden={view !== "label"}>
           <LabelView
+            active={view === "label"}
             available={!info || !!labelsAgent?.online}
             unavailableReason={
               !labelsAgent

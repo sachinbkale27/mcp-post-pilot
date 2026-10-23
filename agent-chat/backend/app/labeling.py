@@ -28,9 +28,9 @@ What to label: {instructions}
 {labels}{grid}
 Look at the image, then outline every object to label with one segment_objects call on image {image_id}
 (model "{model}"): give each a rough box that contains the whole object, a little loose rather than tight;
-the segmentation model traces the exact edges. Only if segment_objects fails for an object, draw that one
-yourself with add_annotations (a polygon, confidence "low"). Report what you labeled, the scores, and
-anything you were unsure about."""
+the segmentation model traces the exact edges. If segment_objects fails, or fails for some objects, draw
+those yourself with add_annotations (polygons, confidence "low") and say so. Report what you labeled, the
+scores, and anything you were unsure about."""
 
 
 GRID = """The attached copy has a yellow grid drawn on it, with lines every {step} pixels labelled with their
@@ -48,6 +48,18 @@ def labeling_agent() -> AgentSpec:
     if spec is None:
         raise LabelingUnavailable("The Labeling agent isn't configured on this server (LABELS_MCP_URL is not set).")
     return spec
+
+
+async def warm_up(model: str = "sam") -> bool:
+    """Ask the label server to start loading the segmentation model (it takes a minute or two after a
+    quiet spell). Best effort: returns whether the request was accepted."""
+    try:
+        spec = labeling_agent()
+        async with asyncio.timeout(15), connect(spec) as mcp:
+            _, is_error = await call_mcp_tool(mcp, "warm_up_segmentation", {"model": model})
+        return not is_error
+    except Exception:  # an older label server without the tool, or it's offline: labeling still works
+        return False
 
 
 def _decode(content: str) -> Any:
@@ -89,10 +101,13 @@ async def run_labeling(
         emit({"type": "agent_start", "id": delegation, "agent": spec.name, "title": spec.title, "task": task})
         is_error = False
         try:
+            # Start loading the segmentation model now; it's needed after the upload and the agent's look
+            warming = asyncio.create_task(warm_up(model))
             async with connect(spec) as mcp:
                 uploaded = await tool(
                     mcp, "upload_image_from_url", {"url": url, "name": image.get("name") or "image", "category": category}
                 )
+            await warming
             image_id = uploaded["imageId"]
             label_line = f"Use exactly these label names: {', '.join(labels)}.\n" if labels else ""
             report = await run_specialist(

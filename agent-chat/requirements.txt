@@ -129,6 +129,8 @@ packaging==26.3
     # via
     #   langchain-core
     #   langsmith
+pillow==12.3.0
+    # via agent-chat (pyproject.toml)
 pycparser==3.11
     # via cffi
 pydantic==2.14.1

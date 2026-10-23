@@ -2,19 +2,23 @@
 
 Browsers can't read most sites' images from script (cross-origin rules), so the UI asks the server.
 The download goes through the fact-checker's fetch: public addresses only, every redirect checked again,
-reading stops at the size limit. Only JPEG, PNG, WebP and GIF are accepted, recognised by their bytes
-rather than the Content-Type header.
+reading stops at the size limit. JPEG, PNG, WebP and GIF (recognised by their bytes, not the
+Content-Type header) are passed through; other formats Pillow can read, such as AVIF (which image CDNs
+often serve), BMP or TIFF, are converted to JPEG, or PNG when they have transparency.
 """
 
+import io
 import re
 from pathlib import PurePosixPath
 from urllib.parse import unquote, urlsplit
 
 import httpx
+from PIL import Image, UnidentifiedImageError
 
 from .local_mcp.research import FetchError, fetch
 
 MAX_IMAGE_BYTES = 15_000_000
+MAX_PIXELS = 50_000_000  # refuse "decompression bombs": small files that expand to huge images
 USER_AGENT = "PostPilotImageFetch/1.0 (+https://agent.sachin-kale.com)"
 EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
 
@@ -38,6 +42,25 @@ def image_type(data: bytes) -> str | None:
     return None
 
 
+def convert(data: bytes) -> tuple[bytes, str, str] | None:
+    """(bytes, media type, source format) of the image as JPEG or PNG, or None if Pillow can't read it."""
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            source = im.format or "image"
+            if im.width * im.height > MAX_PIXELS:
+                raise ImageUrlError(413, f"The image is too large ({im.width} x {im.height} pixels)")
+            im.seek(0)  # animations: the first frame
+            frame = im.convert("RGBA") if im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info else im.convert("RGB")
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        return None
+    out = io.BytesIO()
+    if frame.mode == "RGBA":
+        frame.save(out, "PNG", optimize=True)
+        return out.getvalue(), "image/png", source
+    frame.save(out, "JPEG", quality=92)
+    return out.getvalue(), "image/jpeg", source
+
+
 def file_name(url: str, media_type: str) -> str:
     """A short, safe file name from the URL's last path segment, with the right extension."""
     stem = PurePosixPath(unquote(urlsplit(url).path)).stem
@@ -46,7 +69,8 @@ def file_name(url: str, media_type: str) -> str:
 
 
 async def download_image(url: str) -> tuple[bytes, str, str]:
-    """(bytes, media type, file name) of the image at url."""
+    """(bytes, media type, file name) of the image at url, converted to JPEG or PNG when the browser-side
+    pipeline wouldn't take its format."""
     if not url.lower().startswith(("http://", "https://")):
         raise ImageUrlError(400, "Enter an http(s) address of an image")
     try:
@@ -61,6 +85,9 @@ async def download_image(url: str) -> tuple[bytes, str, str]:
         raise ImageUrlError(413, f"The image is larger than {MAX_IMAGE_BYTES // 1_000_000} MB")
     media_type = image_type(body)
     if media_type is None:
-        hint = resp.headers.get("content-type", "").split(";")[0] or "unknown content"
-        raise ImageUrlError(415, f"That address isn't a JPEG, PNG, WebP or GIF image ({hint}). Use the image's own address.")
+        converted = convert(body)
+        if converted is None:
+            hint = resp.headers.get("content-type", "").split(";")[0] or "unknown content"
+            raise ImageUrlError(415, f"That address isn't an image this tool can read ({hint}). Use the image's own address.")
+        body, media_type, _ = converted
     return body, media_type, file_name(final_url, media_type)
