@@ -167,7 +167,7 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
       <div className="label-grid">
         <section className="label-panel" aria-labelledby="trials-form-heading">
           <h3 id="trials-form-heading">1. What are you looking for?</h3>
-          <small className="label-hint">Only the condition is required; every detail you add narrows the search.</small>
+          <small className="label-hint">Only the disease is required; every detail you add narrows the search.</small>
           <label className="label-field">
             <span>Disease or condition</span>
             <input className="label-input" value={form.condition} placeholder="e.g. breast cancer, type 2 diabetes, asthma"
@@ -185,7 +185,7 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
           </label>
           <label className="label-field">
             <span>A treatment you're interested in <em>(optional)</em></span>
-            <input className="label-input" value={form.drug} placeholder="e.g. immunotherapy, pembrolizumab, a vaccine"
+            <input className="label-input" value={form.drug} placeholder="e.g. immunotherapy, pembrolizumab"
               aria-describedby="trials-drug-help" onChange={(e) => set({ drug: e.target.value })} disabled={busy} />
             <small id="trials-drug-help" className="label-hint">Only trials testing this treatment. Leave blank to see all.</small>
           </label>
