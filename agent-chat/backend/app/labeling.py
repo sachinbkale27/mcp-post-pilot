@@ -28,7 +28,8 @@ What to label: {instructions}
 {labels}{grid}
 Look at the image, then outline every object to label with one segment_objects call on image {image_id}
 (model "{model}"): give each a rough box that contains the whole object, a little loose rather than tight;
-the segmentation model traces the exact edges. If segment_objects fails, or fails for some objects, draw
+the segmentation model traces the exact edges (it is already warming up: don't call warm_up_segmentation).
+If segment_objects fails, or fails for some objects, draw
 those yourself with add_annotations (polygons, confidence "low") and say so.
 
 Label names: unless label names are given above, name each object with a specific, descriptive term for

@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import { CircleAlert, Download, Eye, EyeOff, ImagePlus, Link2, LoaderCircle, RotateCcw, ScanSearch, Square, Stethoscope, Tag } from "lucide-react";
 import {
   fetchImageFromUrl, streamDiagnosis, streamLabel, uploadImage, warmUpLabeling,
-  type AgentEvent, type Annotation, type LabelResult,
+  type AgentEvent, type Annotation, type DiagnosisRegion, type LabelResult,
 } from "../api";
 import { applyEvent } from "../lib/events";
 import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
@@ -38,7 +38,7 @@ interface Diagnosis {
   text: string;
   pending: boolean;
   error?: string;
-  regions?: { label: string; description: string }[];
+  regions?: DiagnosisRegion[];
 }
 
 type Model = "sam" | "medsam";
@@ -181,8 +181,9 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
       setModel(areaModel);
       start({
         instructions:
-          "Outline the areas behind these image findings, every clear example of each:\n" +
-          found.regions.map((r) => `- ${r.label}: ${r.description}`).join("\n"),
+          "Outline the problematic regions behind these findings: every clear example of each (up to 20 in all), " +
+          "the main abnormal area first. Put each finding's significance in the annotation notes.\n" +
+          found.regions.map((r) => `- ${r.label}: ${r.description}. Significance: ${r.significance}`).join("\n"),
         labels: found.regions.map((r) => r.label),
         model: areaModel,
       });
@@ -343,10 +344,12 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
               )}
               {diagnosis.regions && diagnosis.regions.length > 0 && (
                 <div className="diagnosis-regions">
-                  <span>{run?.pending ? "Outlining these areas on the image…" : "Areas outlined on the image:"}</span>
-                  {diagnosis.regions.map((r) => (
-                    <span key={r.label} className="chip" title={r.description}>{r.label}</span>
-                  ))}
+                  <span>{run?.pending ? "Outlining the problematic regions…" : "Problematic regions:"}</span>
+                  <ul>
+                    {diagnosis.regions.map((r) => (
+                      <li key={r.label} title={r.description}><strong>{r.label}</strong>: {r.significance}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
               {diagnosis.error && <p className="label-alert"><CircleAlert size={16} aria-hidden /> {diagnosis.error}</p>}

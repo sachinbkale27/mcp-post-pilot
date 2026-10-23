@@ -67,21 +67,25 @@ async def run_diagnosis(image: dict[str, str], context: str = "") -> AsyncIterat
     yield {"type": "diagnosis_regions", "medical": found.medical, "regions": [r.model_dump() for r in found.regions[:6]]}
 
 
-REGIONS_PROMPT = """From this image interpretation, list the visible areas a reviewer should see outlined
-on the image to check the findings: specific structures or regions (e.g. "pigment-laden macrophages",
-"sheet of atypical cells", "necrosis", "mass in the left lower lobe"), at most 6, most important first.
-Use descriptive morphological or anatomical names, not diagnoses. Leave out findings that are absences
-(e.g. "no necrosis") or that can't be pointed at in the image."""
+REGIONS_PROMPT = """From this image interpretation, list the problematic regions to outline on the image: the
+abnormal or concerning findings a pathologist or radiologist would point at, most important first, at most
+6 kinds. Name each with precise medical terminology for the finding (e.g. "atypical melanocytes",
+"melanophages (pigment-laden macrophages)", "sheet of atypical epithelioid cells", "tumour necrosis",
+"atypical mitotic figure", "haemorrhage", "spiculated mass", "pleural effusion"). Don't list normal tissue,
+background, stroma or general cell shapes, and leave out absences (e.g. "no necrosis"). If the
+interpretation names a leading diagnosis, put it in significance, as what the finding suggests, not in
+the label. For an image that isn't medical, list the main objects instead."""
 
 
 class Region(BaseModel):
-    label: str = Field(description="Short descriptive name for this kind of area, used as the annotation label")
-    description: str = Field(description="What to outline and how to recognise it in the image")
+    label: str = Field(description="Medical term for the finding, used as the annotation label")
+    description: str = Field(description="How to recognise it in the image: appearance, colour, location")
+    significance: str = Field(description="Why it is concerning, or what it suggests (one short sentence)")
 
 
 class Regions(BaseModel):
     medical: bool = Field(description="Whether this is a medical image (histology, cytology, radiology, ...)")
-    regions: list[Region] = Field(description="At most 6, most important first")
+    regions: list[Region] = Field(description="At most 6 kinds, most important first")
 
 
 async def extract_regions(interpretation: str) -> Regions:

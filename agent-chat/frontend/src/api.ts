@@ -56,9 +56,16 @@ export type AgentEvent =
   | { type: "tool_call"; id: string; name: string; input: Record<string, unknown>; agent: string; delegation: string }
   | { type: "tool_result"; id: string; name: string; output: unknown; is_error: boolean; agent: string; delegation: string }
   | ({ type: "label_result" } & LabelResult)
-  | { type: "diagnosis_regions"; medical: boolean; regions: { label: string; description: string }[] }
+  | { type: "diagnosis_regions"; medical: boolean; regions: DiagnosisRegion[] }
   | { type: "error"; message: string }
   | { type: "done" };
+
+/** A problematic area found by Diagnose, outlined on the image by the Labeling agent. */
+export interface DiagnosisRegion {
+  label: string;
+  description: string;
+  significance: string;
+}
 
 /** One annotation as Image Label stores it (image pixels, origin top-left). */
 export interface Annotation {
