@@ -73,12 +73,20 @@ async def download_image(url: str) -> tuple[bytes, str, str]:
     pipeline wouldn't take its format."""
     if not url.lower().startswith(("http://", "https://")):
         raise ImageUrlError(400, "Enter an http(s) address of an image")
+    if "\u2026" in url:  # "…": copied from a page that shortens long links for display
+        raise ImageUrlError(
+            400,
+            "This address was shortened when it was copied (it contains \u201c\u2026\u201d). Copy the full address: "
+            "right-click the image and choose Copy Image Address.",
+        )
     try:
         resp, final_url, body = await fetch(url, max_bytes=MAX_IMAGE_BYTES, user_agent=USER_AGENT)
     except FetchError as exc:
         raise ImageUrlError(400, str(exc)) from exc
     except httpx.HTTPError as exc:
         raise ImageUrlError(502, f"Could not download the image ({type(exc).__name__})") from exc
+    if resp.status_code == 404:
+        raise ImageUrlError(502, "Nothing was found at that address (HTTP 404). Check that it is complete.")
     if resp.status_code >= 400:
         raise ImageUrlError(502, f"The address answered HTTP {resp.status_code}")
     if len(body) > MAX_IMAGE_BYTES:

@@ -46,7 +46,8 @@ def test_returns_the_image_with_a_safe_name(monkeypatch):
     "kwargs, status, message",
     [
         ({"body": b"<html>gallery page</html>"}, 415, "isn't an image this tool can read"),
-        ({"status": 404}, 502, "HTTP 404"),
+        ({"status": 404}, 502, "Check that it is complete"),
+        ({"status": 403}, 502, "HTTP 403"),
         ({"body": PNG + b"\x00" * MAX_IMAGE_BYTES}, 413, "larger than 15 MB"),
         ({"error": FetchError("localhost resolves to a non-public address")}, 400, "non-public"),
         ({"error": httpx.ConnectTimeout("slow")}, 502, "ConnectTimeout"),
@@ -61,6 +62,8 @@ def test_refusals(monkeypatch, kwargs, status, message):
 def test_only_web_addresses(monkeypatch):
     calls = stub_fetch(monkeypatch)
     assert post("file:///etc/passwd").status_code == 400
+    shortened = post("https://media.example/prod/g\u2026022202031528.jpg?q=1")
+    assert shortened.status_code == 400 and "shortened" in shortened.json()["detail"]
     assert calls == []
 
 
