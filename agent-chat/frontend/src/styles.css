@@ -602,7 +602,6 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 .trials-options { display: flex; flex-wrap: wrap; gap: 6px; }
 .trials-options .chip { cursor: pointer; }
 .trials-options .chip.active { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: 600; }
-.trials-patient-toggle { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; }
 .trials-patient { margin-top: 4px; padding: 2px 12px 12px; border: 1px solid var(--line); border-radius: 12px; }
 .trials-question { margin-top: 16px; padding: 10px 12px; border-left: 3px solid var(--accent); border-radius: 8px; background: var(--accent-soft); }
 .trials-question span { color: var(--text-3); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -637,3 +636,6 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 .guide-examples { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .guide-examples .chip { font-size: 12px; }
 .label-intro .link-btn { display: inline-flex; align-items: center; gap: 6px; }
+.label-panel h3 em { font-style: normal; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.label-panel h3 svg { vertical-align: -2px; margin-right: 2px; }
+.trials-patient { margin-top: 8px; }

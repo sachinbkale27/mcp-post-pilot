@@ -81,7 +81,7 @@ const GUIDE: Entry[] = [
   },
   {
     id: "patient",
-    title: "Patient details (optional)",
+    title: "For a specific patient (optional)",
     what:
       "For one person's search. The agent checks each trial's rules against these details and leaves out trials " +
       "that clearly don't take them, saying why.",

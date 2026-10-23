@@ -94,7 +94,6 @@ interface Props {
 /** Fill in a guided form, see the question it makes, and watch the Clinical Trials agent search the registry. */
 export function TrialsView({ available, unavailableReason, busy, onBusyChange, prefill }: Props) {
   const [form, setForm] = useState<TrialForm>(EMPTY);
-  const [showPatient, setShowPatient] = useState(false);
   const [guideStep, setGuideStep] = useState<GuideStep>("condition");
   const [showGuide, setShowGuide] = useState(false); // after a search; before one, the guide fills the results panel
   // The guide follows the form: focusing or clicking a part opens its help
@@ -242,11 +241,10 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
             <small className="label-hint">Phase 1 tests safety, phase 2 whether it works, phase 3 compares it with the standard treatment.</small>
           </div>
 
-          <button className="link-btn trials-patient-toggle" onClick={() => { setShowPatient(!showPatient); setGuideStep("patient"); }} aria-expanded={showPatient}>
-            <UserRound size={14} aria-hidden /> {showPatient ? "Hide patient details" : "For a specific patient? Add details (optional)"}
-          </button>
-          {showPatient && (
-            <div className="trials-patient" {...guide("patient")}>
+          <div {...guide("patient")}>
+            <h3><UserRound size={13} aria-hidden /> 4. For a specific patient <em>(optional)</em></h3>
+            <small className="label-hint">Fill these in to check each trial's rules against the patient. Leave them blank for a general search.</small>
+            <div className="trials-patient">
               <div className="trials-row">
                 <label className="label-field">
                   <span>Age</span>
@@ -267,12 +265,9 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
                 <textarea className="label-input" rows={2} value={form.details} placeholder="e.g. metastatic; progressed on osimertinib"
                   onChange={(e) => set({ details: e.target.value })} disabled={busy} />
               </label>
-              <small className="label-hint">
-                Used to check each trial's criteria and leave out trials that rule the patient out. Don't enter names or
-                other identifying details.
-              </small>
+              <small className="label-hint">Don't enter names or other identifying details.</small>
             </div>
-          )}
+          </div>
 
           <div className="trials-question" aria-live="polite">
             <span>The agent will be asked</span>
@@ -282,7 +277,7 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
           <div className="label-examples" {...guide("try")}>
             {EXAMPLES.map((ex) => (
               <button key={ex.title} className="chip" disabled={busy}
-                onClick={() => { setForm({ ...EMPTY, ...ex.form }); setShowPatient(!!(ex.form.age || ex.form.details)); }}>
+                onClick={() => setForm({ ...EMPTY, ...ex.form })}>
                 {ex.title}
               </button>
             ))}
@@ -299,7 +294,7 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
               </button>
             )}
             {run && !busy && (
-              <button className="link-btn" onClick={() => { setRun(undefined); setForm(EMPTY); setShowPatient(false); }}>
+              <button className="link-btn" onClick={() => { setRun(undefined); setForm(EMPTY); }}>
                 <RotateCcw size={13} aria-hidden /> Start over
               </button>
             )}
