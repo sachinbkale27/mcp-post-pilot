@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import { CircleAlert, Download, Eye, EyeOff, ImagePlus, LoaderCircle, RotateCcw, ScanSearch, Square, Tag } from "lucide-react";
 import { streamLabel, uploadImage, type Annotation, type LabelResult } from "../api";
 import { applyEvent } from "../lib/events";
-import { ACCEPTED_TYPES, prepareImage } from "../lib/images";
+import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
 import { AgentCard, type Step } from "./Messages";
 
 const EXAMPLES = [
@@ -77,8 +77,11 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
     setRun({ steps: [], pending: true });
     const update = (fn: (r: Run) => Run) => setRun((r) => (r ? fn(r) : r));
     try {
+      // The model sees a copy with a pixel grid; the saved image stays clean
+      const grid = await withGrid(upload.preview);
       const request = {
-        image: { url: upload.url, data_url: upload.preview, name: upload.name },
+        image: { url: upload.url, data_url: grid.dataUrl, name: upload.name },
+        grid_step: grid.step,
         instructions: instructions.trim(),
         labels: labels.split(",").map((l) => l.trim()).filter(Boolean),
       };

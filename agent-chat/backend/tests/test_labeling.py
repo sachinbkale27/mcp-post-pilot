@@ -48,12 +48,13 @@ def label_server(monkeypatch):
 
 
 async def test_uploads_annotates_and_returns_the_saved_result(label_server):
-    events = [e async for e in labeling.run_labeling(IMAGE, "Circle every cat", ["cat", "dog"], "pets")]
+    events = [e async for e in labeling.run_labeling(IMAGE, "Circle every cat", ["cat", "dog"], "pets", 50)]
 
     upload = label_server[0]
     assert upload == ("upload_image_from_url", {"url": "https://blog.example/media/abc.webp", "name": "cats.webp", "category": "pets"})
     task = next(t for name, t in label_server if name == "agent")
     assert "img-1 (200 x 100 pixels)" in task and "Circle every cat" in task and "cat, dog" in task
+    assert "lines every 50 pixels" in task
 
     types = [e["type"] for e in events]
     assert types[0] == "agent_start" and types[-1] == "agent_end" and not events[-1]["is_error"]

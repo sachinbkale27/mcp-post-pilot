@@ -113,7 +113,7 @@ export function streamChat(
 
 /** Upload one image to Image Label and have the Labeling agent annotate it; ends with a label_result event. */
 export function streamLabel(
-  request: { image: ChatImage; instructions: string; labels: string[] },
+  request: { image: ChatImage; instructions: string; labels: string[]; grid_step?: number },
   signal: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
   return streamEvents("/label", request, signal);

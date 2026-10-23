@@ -53,6 +53,7 @@ class LabelRequest(BaseModel):
     instructions: str = Field(min_length=3, max_length=2000)
     labels: list[str] = Field(default_factory=list, max_length=20)
     category: str = Field(default="agent-chat", max_length=60)
+    grid_step: int | None = Field(default=None, ge=10, le=1000)  # the model's copy has a pixel grid this far apart
 
     @field_validator("labels")
     @classmethod
@@ -99,7 +100,9 @@ async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
     """Upload one image to Image Label, have the Labeling agent annotate it, and stream the progress and
     a final label_result event (saved annotations and COCO / YOLO exports)."""
     try:
-        async for event in run_labeling(req.image.model_dump(), req.instructions, req.labels, req.category.strip() or "agent-chat"):
+        async for event in run_labeling(
+            req.image.model_dump(), req.instructions, req.labels, req.category.strip() or "agent-chat", req.grid_step
+        ):
             yield _sse(event)
     except LabelingUnavailable as exc:
         yield _sse({"type": "error", "message": str(exc)})

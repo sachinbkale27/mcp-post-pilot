@@ -115,7 +115,8 @@ def task_message(spec: AgentSpec, task: str, user_text: str, images: list[dict[s
         for img in images
     )
     parts: list[dict[str, Any]] = [{"type": "text", "text": f"{text}\n\n[Attached image(s), uploaded at:\n{listing}]"}]
-    parts += [{"type": "image_url", "image_url": {"url": img["data_url"]}} for img in images]
+    # detail "high": full resolution, so agents can place shapes and read small text precisely
+    parts += [{"type": "image_url", "image_url": {"url": img["data_url"], "detail": "high"}} for img in images]
     return HumanMessage(parts)
 
 

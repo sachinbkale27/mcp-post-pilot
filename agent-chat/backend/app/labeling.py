@@ -25,10 +25,16 @@ TASK = """Annotate Image Label image {image_id} ({width} x {height} pixels). It 
 image attached here: do not upload it again.
 
 What to label: {instructions}
-{labels}
+{labels}{grid}
 Look at the image, then add all the annotations in one add_annotations call on image {image_id}, using
 polygons (or circles for round objects) so they export as training data, with confidence "low" or "medium".
 Report what you labeled and anything you were unsure about."""
+
+
+GRID = """The attached copy has a yellow grid drawn on it, with lines every {step} pixels labelled with their
+pixel values along the top and left edges. Use the grid to read off coordinates: for each object, find the
+grid cell of each edge, then estimate within the cell. The grid is not part of the saved image.
+"""
 
 
 class LabelingUnavailable(RuntimeError):
@@ -51,7 +57,7 @@ def _decode(content: str) -> Any:
 
 
 async def run_labeling(
-    image: dict[str, str], instructions: str, labels: list[str], category: str
+    image: dict[str, str], instructions: str, labels: list[str], category: str, grid_step: int | None = None
 ) -> AsyncIterator[dict[str, Any]]:
     """Yield UI events while the image is uploaded, annotated and exported."""
     spec = labeling_agent()
@@ -91,6 +97,7 @@ async def run_labeling(
                     height=uploaded.get("height"),
                     instructions=instructions,
                     labels=label_line,
+                    grid=GRID.format(step=grid_step) if grid_step else "",
                 ),
                 user_text=instructions,
                 images=[image],
