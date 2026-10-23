@@ -16,6 +16,7 @@ from .diagnose import run_diagnosis
 from .image_url import ImageUrlError, download_image
 from .labeling import LabelingUnavailable, run_labeling, warm_up
 from .pathology import run_pathology
+from .handoff import HandoffError, ResultsHandoff, hand_off
 from .trials_search import TrialsUnavailable, run_trials
 from .origin import OriginSecretMiddleware
 
@@ -180,6 +181,17 @@ async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
     except Exception as exc:
         yield _sse({"type": "error", "message": _error_message(exc)})
     yield _sse({"type": "done"})
+
+
+@app.post("/handoff")
+async def handoff(results: ResultsHandoff):
+    """Ask AI: hand an image analysis to the genetics assistant; returns the address of a chat about it."""
+    try:
+        return {"url": await hand_off(results)}
+    except HandoffError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach the genetics assistant ({type(exc).__name__})")
 
 
 @app.post("/label/pathology", response_class=EventSourceResponse)

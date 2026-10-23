@@ -164,6 +164,11 @@ Resources:
               - Effect: Allow
                 Action: ssm:GetParametersByPath
                 Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/mcp-post-pilot
+              # The key for handing image analysis results to the genetics assistant ("Ask AI"); the
+              # genetics stack (us-east-1) generates it
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Sub arn:aws:secretsmanager:us-east-1:${AWS::AccountId}:secret:genetics-platform/handoff-prod-*
 
   BlogFunction:
     Condition: HasImage
@@ -235,6 +240,7 @@ Resources:
           SSM_PARAMETER_PATH: /mcp-post-pilot
           MCP_SERVER_URL: !Sub "${McpFunctionUrl.FunctionUrl}mcp"
           ORIGIN_SECRET: !Ref OriginSecret
+          GENETICS_HANDOFF_SECRET: genetics-platform/handoff-prod   # in us-east-1
           AWS_LWA_PORT: "8102"
           AWS_LWA_READINESS_CHECK_PROTOCOL: tcp
           AWS_LWA_INVOKE_MODE: response_stream   # SSE: send tokens as they are produced
