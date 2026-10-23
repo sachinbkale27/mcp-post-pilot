@@ -15,6 +15,7 @@ from .agent import list_agents, reset_thread, run_turn
 from .diagnose import run_diagnosis
 from .image_url import ImageUrlError, download_image
 from .labeling import LabelingUnavailable, run_labeling, warm_up
+from .pathology import run_pathology
 from .trials_search import TrialsUnavailable, run_trials
 from .origin import OriginSecretMiddleware
 
@@ -72,6 +73,13 @@ class LabelRequest(BaseModel):
             if len(label) > MAX_LABEL:
                 raise ValueError(f"label names must be at most {MAX_LABEL} characters: {label!r} is {len(label)}")
         return labels
+
+
+class PathologyRequest(BaseModel):
+    image: ChatImage
+    action: Literal["nuclei", "quality", "normalize"]
+    image_id: str | None = Field(default=None, pattern=r"^[0-9a-f-]{36}$")  # already in Image Label: don't upload again
+    category: str = Field(default="agent-chat", max_length=60)
 
 
 class TrialsRequest(BaseModel):
@@ -164,6 +172,20 @@ async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
             req.grid_step,
             req.model,
         ):
+            yield _sse(event)
+    except LabelingUnavailable as exc:
+        yield _sse({"type": "error", "message": str(exc)})
+    except Exception as exc:
+        yield _sse({"type": "error", "message": _error_message(exc)})
+    yield _sse({"type": "done"})
+
+
+@app.post("/label/pathology", response_class=EventSourceResponse)
+async def label_pathology(req: PathologyRequest) -> AsyncIterable[ServerSentEvent]:
+    """Run one histopathology tool (nuclei outlines, quality check or stain normalization) on an image and
+    stream the tool calls and the result."""
+    try:
+        async for event in run_pathology(req.image.model_dump(), req.action, req.image_id, req.category.strip() or "agent-chat"):
             yield _sse(event)
     except LabelingUnavailable as exc:
         yield _sse({"type": "error", "message": str(exc)})

@@ -142,9 +142,8 @@ async def run_labeling(
             )
             async with connect(spec) as mcp:
                 saved = await tool(mcp, "get_image", {"image_id": image_id})
-                coco, yolo = await asyncio.gather(
-                    tool(mcp, "export_annotations", {"image_id": image_id, "format": "coco"}),
-                    tool(mcp, "export_annotations", {"image_id": image_id, "format": "yolo"}),
+                coco, yolo, qupath = await asyncio.gather(
+                    *(tool(mcp, "export_annotations", {"image_id": image_id, "format": f}) for f in ("coco", "yolo", "qupath"))
                 )
             emit(
                 {
@@ -154,7 +153,7 @@ async def run_labeling(
                     "height": saved.get("height"),
                     "annotations": saved.get("annotations") or [],
                     "report": report,
-                    "exports": {"coco": coco, "yolo": yolo},
+                    "exports": {"coco": coco, "yolo": yolo, "qupath": qupath},
                 }
             )
         except Exception:

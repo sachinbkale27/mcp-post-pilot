@@ -659,3 +659,21 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 .faq-answer { padding: 0 8px 10px 28px; color: var(--text-2); font-size: 13.5px; line-height: 1.55; }
 .faq-answer ul { margin: 0; padding-left: 16px; }
 .faq-answer li + li { margin-top: 2px; }
+
+/* ---- histology tools ---- */
+.histology-tools { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.histology-tools .label-source-title { display: flex; align-items: center; gap: 6px; }
+.histology-tools .label-source-title em { color: var(--text-3); font-style: normal; font-weight: 400; }
+.histology-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.histology-normalized { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--text-2); font-size: 13px; }
+.nuclei-summary { margin: 8px 0 0; color: var(--text-2); font-size: 13.5px; }
+.nuclei-summary strong { color: var(--text); }
+.nuclei-summary span[title] { text-decoration: underline dotted; cursor: help; }
+.quality-card { margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--line); border-left-width: 4px; border-radius: 10px; background: var(--bg-2); font-size: 13.5px; color: var(--text-2); }
+.quality-card h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; color: var(--text); font-size: 14.5px; }
+.quality-card ul { margin: 0; padding-left: 18px; }
+.quality-card p { margin: 0; }
+.quality-card .quality-metrics { margin-top: 6px; color: var(--text-3); font-size: 12px; }
+.quality-good { border-left-color: var(--ok); } .quality-good h4 svg { color: var(--ok); }
+.quality-check { border-left-color: #d97706; } .quality-check h4 svg { color: #d97706; }
+.quality-poor { border-left-color: var(--danger); } .quality-poor h4 svg { color: var(--danger); }

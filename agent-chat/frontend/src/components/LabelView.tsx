@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CircleAlert, Download, Eye, EyeOff, FlaskConical, ImagePlus, Link2, LoaderCircle, RotateCcw, ScanSearch, Square, Stethoscope, Tag } from "lucide-react";
+import { CircleAlert, CircleCheck, Download, Eye, EyeOff, FlaskConical, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
 import {
-  fetchImageFromUrl, streamDiagnosis, streamLabel, uploadImage, warmUpLabeling,
-  type AgentEvent, type Annotation, type DiagnosisRegion, type LabelResult,
+  fetchImageFromUrl, streamDiagnosis, streamLabel, streamPathology, uploadImage, warmUpLabeling,
+  type AgentEvent, type Annotation, type DiagnosisRegion, type LabelResult, type PathologyAction, type QualityResult,
 } from "../api";
 import { applyEvent } from "../lib/events";
 import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
@@ -30,9 +30,17 @@ interface Upload {
 interface Run {
   steps: Step[];
   result?: LabelResult;
+  quality?: QualityResult;
   error?: string;
   pending: boolean;
+  action?: PathologyAction; // a histology tool run, not the agent
 }
+
+const PROGRESS: Record<PathologyAction, string> = {
+  nuclei: "Finding nuclei with StarDist…",
+  quality: "Checking image quality…",
+  normalize: "Normalizing the stain colours…",
+};
 
 interface Diagnosis {
   text: string;
@@ -67,6 +75,10 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // The image's id in Image Label once a run has uploaded it, so the histology tools don't upload it again
+  const [labelImageId, setLabelImageId] = useState<string>();
+  // While the stain-normalized copy is shown: the original, to go back to
+  const [original, setOriginal] = useState<{ upload: Upload; imageId?: string }>();
 
   // The segmentation model takes a minute or two to start after a quiet spell: start it while the
   // user picks an image and writes instructions (again every few minutes while the view is open)
@@ -84,9 +96,11 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
 
   const canRun = available && !busy && upload?.status === "ready" && instructions.trim().length >= 3;
 
-  function addFile(file: File | undefined) {
-    if (!file || busy) return;
+  function addFile(file: File | undefined, keepOriginal = false) {
+    if (!file || (busy && !keepOriginal)) return;
     setRun(undefined);
+    setLabelImageId(undefined);
+    if (!keepOriginal) setOriginal(undefined);
     diagnoseAbort.current?.abort();
     setDiagnosis(undefined);
     setUpload({ name: file.name, status: "processing" });
@@ -140,7 +154,10 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
         labels: areas?.labels ?? labels.split(",").map((l) => l.trim()).filter(Boolean),
       };
       for await (const event of streamLabel(request, controller.signal)) {
-        if (event.type === "label_result") update((r) => ({ ...r, result: event }));
+        if (event.type === "label_result") {
+          update((r) => ({ ...r, result: event }));
+          setLabelImageId(event.image_id);
+        }
         else if (event.type === "error") update((r) => ({ ...r, error: event.message }));
         else update((r) => ({ ...r, steps: applyEvent(r.steps, event) }));
       }
@@ -159,6 +176,53 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     setUpload(undefined);
     setRun(undefined);
     setDiagnosis(undefined);
+  }
+
+  /** Run one histology tool on the image: nuclei outlines, a quality check, or a stain-normalized copy. */
+  async function runTool(action: PathologyAction) {
+    if (!upload?.url || !upload.preview || busy || !available) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    onBusyChange(true);
+    setRun({ steps: [], pending: true, action });
+    const update = (fn: (r: Run) => Run) => setRun((r) => (r ? fn(r) : r));
+    const current = upload;
+    let normalized: Extract<AgentEvent, { type: "normalized" }> | undefined;
+    try {
+      const request = { image: { url: upload.url, data_url: upload.preview, name: upload.name }, action, image_id: labelImageId };
+      for await (const event of streamPathology(request, controller.signal)) {
+        if (event.type === "label_result") update((r) => ({ ...r, result: event }));
+        else if (event.type === "quality_result") update((r) => ({ ...r, quality: event }));
+        else if (event.type === "label_image") setLabelImageId(event.image_id);
+        else if (event.type === "normalized") normalized = event;
+        else if (event.type === "error") update((r) => ({ ...r, error: event.message }));
+        else update((r) => ({ ...r, steps: applyEvent(r.steps, event) }));
+      }
+      if (normalized) {
+        // Show the normalized copy in place of the original (which stays available to go back to)
+        const file = await fetchImageFromUrl(normalized.url);
+        const before = { upload: current, imageId: labelImageId };
+        addFile(new File([file], normalized.name || file.name, { type: file.type }), true);
+        setOriginal((o) => o ?? before);
+        setLabelImageId(normalized.image_id);
+        return;
+      }
+    } catch (e) {
+      const stopped = (e as Error).name === "AbortError";
+      update((r) => ({ ...r, error: stopped ? "Stopped." : (e as Error).message }));
+    } finally {
+      abortRef.current = null;
+      update((r) => ({ ...r, pending: false }));
+      onBusyChange(false);
+    }
+  }
+
+  function restoreOriginal() {
+    if (!original || busy) return;
+    setUpload(original.upload);
+    setRun(undefined);
+    setLabelImageId(original.imageId);
+    setOriginal(undefined);
   }
 
   /** Stream an AI interpretation of the image; "What to label" is passed along as context. */
@@ -346,6 +410,34 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
               <button className="link-btn" onClick={reset}><RotateCcw size={13} aria-hidden /> Start over</button>
             )}
           </div>
+
+          <div className="histology-tools">
+            <span className="label-source-title"><Microscope size={14} aria-hidden /> Histology tools <em>(H&E-stained tissue)</em></span>
+            <div className="histology-buttons">
+              <button className="label-secondary" onClick={() => runTool("quality")} disabled={busy || upload?.status !== "ready" || !available}
+                title="Tissue, blur, marker pen, exposure and staining checks">
+                <Gauge size={15} aria-hidden /> Check quality
+              </button>
+              <button className="label-secondary" onClick={() => runTool("nuclei")} disabled={busy || upload?.status !== "ready" || !available}
+                title="Find and outline every cell nucleus automatically (StarDist)">
+                <ScanSearch size={15} aria-hidden /> Detect nuclei
+              </button>
+              <button className="label-secondary" onClick={() => runTool("normalize")} disabled={busy || upload?.status !== "ready" || !available}
+                title="Standardise the pink and purple stain colours (Macenko); saved as a new image">
+                <Palette size={15} aria-hidden /> Normalize stain
+              </button>
+            </div>
+            <small className="label-hint">
+              Automatic: no instructions needed. Nuclei detection works on H&E slides only; the first run after a quiet spell
+              takes up to a minute while the model starts.
+            </small>
+            {original && (
+              <p className="histology-normalized">
+                Showing the stain-normalized copy (saved in Image Label as a new image).{" "}
+                <button className="link-btn" onClick={restoreOriginal} disabled={busy}><Undo2 size={13} aria-hidden /> Back to the original</button>
+              </p>
+            )}
+          </div>
         </section>
 
         <section className="label-panel label-output" aria-live="polite" aria-labelledby="label-result-heading">
@@ -356,11 +448,12 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
           <div ref={resultRef} className="label-result-anchor">
             {run?.result && upload?.preview && <LabelResultView result={run.result} image={upload.preview} name={upload.name} />}
           </div>
+          {run?.quality && <QualityCard quality={run.quality} />}
           {run?.pending && (
             <p className="label-progress">
               <LoaderCircle size={15} className="spin" aria-hidden />
-              {diagnosis ? "Outlining the problematic regions on the image…" : "Annotating the image…"}
-              <span>usually 20 to 40 seconds</span>
+              {run.action ? PROGRESS[run.action] : diagnosis ? "Outlining the problematic regions on the image…" : "Annotating the image…"}
+              <span>{run.action ? "a few seconds, up to a minute if the model is starting" : "usually 20 to 40 seconds"}</span>
             </p>
           )}
           {run?.error && <p className="label-alert"><CircleAlert size={16} aria-hidden /> {run.error}</p>}
@@ -423,7 +516,8 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
   const labelNames = [...new Set(result.annotations.map((a) => a.label))];
   const colorOf = (label: string) => PALETTE[labelNames.indexOf(label) % PALETTE.length];
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const [showText, setShowText] = useState(true);
+  const [showText, setShowText] = useState(result.annotations.length <= 40); // hundreds of nuclei would bury the image
+  const nuclei = result.nuclei_summary;
   const visible = result.annotations.filter((a) => !hidden.has(a.label));
   const toggle = (label: string) =>
     setHidden((h) => { const next = new Set(h); next.has(label) ? next.delete(label) : next.add(label); return next; });
@@ -455,8 +549,24 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
         </button>
       </div>
 
+      {nuclei && (
+        <p className="nuclei-summary">
+          <strong>{nuclei.count.toLocaleString()} nuclei</strong>
+          {nuclei.returned < nuclei.count && ` (the ${nuclei.returned} most confident are outlined)`} ·{" "}
+          {nuclei.per_megapixel.toLocaleString()} per megapixel · median area {nuclei.median_area} px² ·{" "}
+          <span title="Spread of nuclear size (coefficient of variation): higher means more variable sizes, a rough sign of pleomorphism">
+            size variation {nuclei.area_variation}
+          </span>{" "}
+          · {nuclei.enlarged} enlarged (over 2.5× the median area)
+        </p>
+      )}
       {result.annotations.length === 0 ? (
-        <p className="label-alert"><CircleAlert size={16} aria-hidden /> The agent saved no annotations. Try more specific instructions.</p>
+        <p className="label-alert"><CircleAlert size={16} aria-hidden /> {nuclei ? "No nuclei were found. Is this an H&E-stained tissue image?" : "The agent saved no annotations. Try more specific instructions."}</p>
+      ) : nuclei ? (
+        <p className="label-note">
+          Nuclei are found automatically by StarDist, a model trained on H&E slides. These are measurements for research
+          and datasets, not a diagnosis.
+        </p>
       ) : (
         <p className="label-note">
           Outlines are traced by Segment Anything from the agent's boxes; dashed ones scored low. Check that each
@@ -474,12 +584,20 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
         <button className="label-download" onClick={() => download("classes.txt", result.exports.yolo.classes.join("\n") + "\n", "text/plain")} disabled={!exportable}>
           <Download size={14} aria-hidden /> YOLO classes
         </button>
+        {result.exports.qupath !== undefined && (
+          <button className="label-download" onClick={() => download(`${base}.geojson`, JSON.stringify(result.exports.qupath), "application/geo+json")}
+            disabled={!result.annotations.length} title="For QuPath: File > Import objects">
+            <Download size={14} aria-hidden /> QuPath GeoJSON
+          </button>
+        )}
       </div>
 
-      <details className="label-report">
-        <summary>Agent's report</summary>
-        <div className="answer"><Markdown remarkPlugins={[remarkGfm]}>{result.report}</Markdown></div>
-      </details>
+      {result.report && (
+        <details className="label-report">
+          <summary>Agent's report</summary>
+          <div className="answer"><Markdown remarkPlugins={[remarkGfm]}>{result.report}</Markdown></div>
+        </details>
+      )}
       <p className="label-saved">
         Saved in <a href="https://labels.sachin-kale.com" target="_blank" rel="noreferrer">Image Label</a> as image{" "}
         <span className="mono">{result.image_id}</span> (in the shared agent account).
@@ -536,4 +654,30 @@ function download(filename: string, content: string, type: string) {
   const link = Object.assign(document.createElement("a"), { href: url, download: filename });
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const VERDICTS = {
+  good: { text: "Good quality", icon: CircleCheck },
+  check: { text: "Check before analysing", icon: TriangleAlert },
+  poor: { text: "Poor quality", icon: CircleAlert },
+} as const;
+
+/** check_image_quality's verdict, warnings and the measurements behind them. */
+function QualityCard({ quality }: { quality: QualityResult }) {
+  const { text, icon: Icon } = VERDICTS[quality.verdict];
+  const m = quality.metrics;
+  return (
+    <div className={`quality-card quality-${quality.verdict}`}>
+      <h4><Icon size={16} aria-hidden /> {text}</h4>
+      {quality.warnings.length ? (
+        <ul>{quality.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+      ) : (
+        <p>Enough tissue, in focus, no marker pen, well exposed and well stained.</p>
+      )}
+      <p className="quality-metrics">
+        Tissue {Math.round((m.tissue_fraction ?? 0) * 100)}% · sharpness {m.blur_score} · pen {((m.pen_fraction ?? 0) * 100).toFixed(1)}% ·
+        stain saturation {m.stain_saturation}
+      </p>
+    </div>
+  );
 }

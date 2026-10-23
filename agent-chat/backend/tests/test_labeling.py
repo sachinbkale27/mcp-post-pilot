@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 import pytest
 from fastapi.testclient import TestClient
 
-from app import labeling, main
+from app import labeling, main, pathology
 from app.specialists import AgentSpec
 
 LABELS = AgentSpec(
@@ -14,6 +14,11 @@ LABELS = AgentSpec(
     images=True, attachment_base_url="https://blog.example",
 )
 IMAGE = {"url": "/media/abc.webp", "data_url": "data:image/webp;base64,AAAA", "name": "cats.webp"}
+EXPORTS = {
+    "coco": {"result": "coco-json"},
+    "yolo": {"classes": ["cat"], "annotations": "0 0.25 0.4 0.2 0.4"},
+    "qupath": {"type": "FeatureCollection", "features": []},
+}
 SAVED = [{"id": "a1", "type": "circle", "label": "cat", "x": 50, "y": 40, "radius": 20, "confidence": "low"}]
 
 
@@ -31,8 +36,13 @@ def label_server(monkeypatch):
             "warm_up_segmentation": {"warming": "sam"},
             "upload_image_from_url": {"imageId": "img-1", "width": 200, "height": 100},
             "get_image": {"imageId": "img-1", "width": 200, "height": 100, "annotations": SAVED},
-            "export_annotations": {"result": "coco-json"} if arguments.get("format") == "coco" else {"classes": ["cat"], "annotations": "0 0.25 0.4 0.2 0.4"},
+            "export_annotations": EXPORTS.get(arguments.get("format")),
+            "detect_nuclei": {"summary": {"count": 584, "enlarged": 1}, "labels": {"nucleus": 299, "enlarged nucleus": 1}},
+            "check_image_quality": {"verdict": "good", "warnings": [], "metrics": {"blur_score": 800.6}},
+            "normalize_stain": {"original": "img-1", "normalized": {"imageId": "img-9"}},
         }
+        if name == "get_image" and arguments["image_id"] == "img-9":
+            return json.dumps({"imageId": "img-9", "filename": "abc-normalized.jpg", "url": "https://s3.example/n.jpg"}), False
         return json.dumps(results[name]), False
 
     async def fake_specialist(spec, *, task, images, delegation_id, emit, **_):
@@ -45,6 +55,8 @@ def label_server(monkeypatch):
     monkeypatch.setattr(labeling, "connect", fake_connect)
     monkeypatch.setattr(labeling, "call_mcp_tool", fake_call)
     monkeypatch.setattr(labeling, "run_specialist", fake_specialist)
+    monkeypatch.setattr(pathology, "connect", fake_connect)
+    monkeypatch.setattr(pathology, "call_mcp_tool", fake_call)
     return calls
 
 
@@ -64,7 +76,7 @@ async def test_uploads_annotates_and_returns_the_saved_result(label_server):
     assert {e["delegation"] for e in events if e["type"] in ("tool_call", "tool_result")} == {events[0]["id"]}
     result = next(e for e in events if e["type"] == "label_result")
     assert result["image_id"] == "img-1" and result["annotations"] == SAVED
-    assert result["exports"] == {"coco": "coco-json", "yolo": {"classes": ["cat"], "annotations": "0 0.25 0.4 0.2 0.4"}}
+    assert result["exports"] == {"coco": "coco-json", "yolo": EXPORTS["yolo"], "qupath": EXPORTS["qupath"]}
     assert result["report"] == "Labeled one cat (approximate)."
 
 
@@ -102,3 +114,20 @@ def test_label_request_accepts_long_medical_terms():
     assert len(req.labels[0]) == 41
     with pytest.raises(ValidationError, match="at most 80"):
         LabelRequest(image=image, instructions="Outline it", labels=["x" * 81])
+
+
+async def test_pathology_tools_upload_once_and_return_results(label_server):
+    events = [e async for e in pathology.run_pathology(IMAGE, "nuclei")]
+    assert [c[0] for c in label_server] == ["upload_image_from_url", "detect_nuclei", "get_image", "export_annotations", "export_annotations", "export_annotations"]
+    result = next(e for e in events if e["type"] == "label_result")
+    assert result["nuclei_summary"]["count"] == 584 and result["exports"]["qupath"]["type"] == "FeatureCollection"
+    assert next(e for e in events if e["type"] == "label_image")["image_id"] == "img-1"
+
+    label_server.clear()
+    events = [e async for e in pathology.run_pathology(IMAGE, "quality", image_id="0" * 36)]
+    assert [c[0] for c in label_server] == ["check_image_quality"]  # already uploaded: no second copy
+    assert next(e for e in events if e["type"] == "quality_result")["verdict"] == "good"
+
+    events = [e async for e in pathology.run_pathology(IMAGE, "normalize", image_id="0" * 36)]
+    normalized = next(e for e in events if e["type"] == "normalized")
+    assert normalized == {"type": "normalized", "image_id": "img-9", "name": "abc-normalized.jpg", "url": "https://s3.example/n.jpg"}

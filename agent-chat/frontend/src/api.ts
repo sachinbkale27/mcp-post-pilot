@@ -56,6 +56,9 @@ export type AgentEvent =
   | { type: "tool_call"; id: string; name: string; input: Record<string, unknown>; agent: string; delegation: string }
   | { type: "tool_result"; id: string; name: string; output: unknown; is_error: boolean; agent: string; delegation: string }
   | ({ type: "label_result" } & LabelResult)
+  | { type: "label_image"; image_id: string }
+  | ({ type: "quality_result" } & QualityResult)
+  | { type: "normalized"; image_id: string; name: string; url: string }
   | { type: "diagnosis_regions"; medical: boolean; regions: DiagnosisRegion[]; diagnosis: string; lesion_area: string }
   | { type: "trials_report"; report: string }
   | { type: "error"; message: string }
@@ -115,8 +118,28 @@ export interface LabelResult {
   height: number;
   annotations: Annotation[];
   report: string;
-  exports: { coco: unknown; yolo: { classes: string[]; annotations: string } };
+  exports: { coco: unknown; yolo: { classes: string[]; annotations: string }; qupath?: unknown };
+  nuclei_summary?: NucleiSummary; // when the result came from detect_nuclei
 }
+
+/** detect_nuclei's measurements (StarDist). */
+export interface NucleiSummary {
+  count: number;
+  per_megapixel: number;
+  median_area: number;
+  area_variation: number;
+  enlarged: number;
+  returned: number;
+}
+
+/** check_image_quality's verdict, measurements and plain-language warnings. */
+export interface QualityResult {
+  verdict: "good" | "check" | "poor";
+  warnings: string[];
+  metrics: Record<string, number>;
+}
+
+export type PathologyAction = "nuclei" | "quality" | "normalize";
 
 /** One specialist agent and what its MCP server advertises. */
 export interface AgentInfo {
@@ -179,6 +202,14 @@ export function streamLabel(
 /** Run the Clinical Trials agent on one search; the trials are in its submit_trials result. */
 export function streamTrials(request: { question: string; person: string }, signal: AbortSignal): AsyncGenerator<AgentEvent> {
   return streamEvents("/trials", request, signal);
+}
+
+/** Run one histopathology tool (StarDist nuclei, quality check, stain normalization) on an image. */
+export function streamPathology(
+  request: { image: ChatImage; action: PathologyAction; image_id?: string },
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  return streamEvents("/label/pathology", request, signal);
 }
 
 /** Stream an AI interpretation of one image (token events; research and education, not a diagnosis). */

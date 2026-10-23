@@ -25,8 +25,15 @@ Annotations
   remove_annotations; replace_annotations overwrites everything on an image, so only use it when the
   task asks to replace them, and carry over every field you keep.
 
+Histopathology (H&E-stained tissue)
+- detect_nuclei(image_id) finds and outlines every nucleus automatically (StarDist): use it when the user
+  asks for nuclei or cells on an H&E slide instead of boxing them yourself. Report the count, median area,
+  size variation and enlarged nuclei as measurements, not a diagnosis.
+- check_image_quality(image_id) reports blur, little tissue, marker pen, exposure and faint staining;
+  normalize_stain(image_id) saves a colour-standardised copy as a new image (report its id).
+
 Exports
-- export_annotations(image_id, format) exports one image as COCO JSON or YOLO, numbering classes by first
+- export_annotations(image_id, format) exports one image as COCO JSON, YOLO or QuPath GeoJSON ("qupath"), numbering classes by first
   appearance in that image. Report the image, annotation and class counts and how many annotations
   were left out as non-exportable types; don't paste whole exports unless asked.
 

@@ -101,6 +101,10 @@ const TOOLS: Record<string, ToolMeta> = {
     running: (a) => `Tracing ${count(a.objects, "outline")}${a.model === "medsam" ? " with MedSAM" : ""}`,
     done: (a) => `Traced ${count(a.objects, "outline")}${a.model === "medsam" ? " with MedSAM" : ""}`,
   },
+  detect_nuclei: { kind: "write", icon: ScanSearch, running: () => "Finding nuclei with StarDist", done: () => "Found nuclei with StarDist" },
+  check_image_quality: { kind: "read", icon: SearchCheck, running: () => "Checking image quality", done: () => "Checked image quality" },
+  normalize_stain: { kind: "write", icon: WandSparkles, running: () => "Normalizing the stain colours", done: () => "Normalized the stain colours" },
+  warm_up_pathology: { kind: "read", icon: Wrench, running: () => "Starting the nuclei model", done: () => "Started the nuclei model" },
   replace_annotations: { kind: "destructive", icon: Replace, running: () => "Replacing annotations", done: () => "Replaced annotations" },
   remove_annotations: { kind: "destructive", icon: Eraser, running: () => "Removing annotations", done: () => "Removed annotations" },
   export_annotations: {
