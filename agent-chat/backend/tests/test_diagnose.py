@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessageChunk
 
 from app import diagnose, main
+from app.diagnose import Region, Regions
 
 IMAGE = {"url": "/media/abc.webp", "data_url": "data:image/webp;base64,AAAA", "name": "slide.webp"}
 
@@ -21,9 +22,18 @@ class FakeModel:
 def test_streams_the_interpretation_with_the_image_and_context(monkeypatch):
     model = FakeModel()
     monkeypatch.setattr(diagnose, "_model", lambda **kwargs: model)
+    seen = []
+
+    async def fake_regions(text):
+        seen.append(text)
+        return Regions(medical=True, regions=[Region(label="melanophage", description="cells packed with brown pigment")])
+
+    monkeypatch.setattr(diagnose, "extract_regions", fake_regions)
     with TestClient(main.app) as client:
         body = client.post("/diagnose", json={"image": IMAGE, "context": "skin biopsy, back"}).text
     assert body.count("event: token") == 2 and "H&E histology" in body and body.rstrip().endswith("data: {}")
+    assert seen == ["## What the image shows\nH&E histology"]  # the regions come from the whole interpretation
+    assert "event: diagnosis_regions" in body and '"medical":true' in body.replace(" ", "") and "melanophage" in body
     system, human = model.messages
     assert "not a medical diagnosis" in system.content
     text, image = human.content

@@ -2,7 +2,10 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CircleAlert, Download, Eye, EyeOff, ImagePlus, Link2, LoaderCircle, RotateCcw, ScanSearch, Square, Stethoscope, Tag } from "lucide-react";
-import { fetchImageFromUrl, streamDiagnosis, streamLabel, uploadImage, warmUpLabeling, type Annotation, type LabelResult } from "../api";
+import {
+  fetchImageFromUrl, streamDiagnosis, streamLabel, uploadImage, warmUpLabeling,
+  type AgentEvent, type Annotation, type LabelResult,
+} from "../api";
 import { applyEvent } from "../lib/events";
 import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
 import { AgentCard, type Step } from "./Messages";
@@ -35,7 +38,10 @@ interface Diagnosis {
   text: string;
   pending: boolean;
   error?: string;
+  regions?: { label: string; description: string }[];
 }
+
+type Model = "sam" | "medsam";
 
 interface Props {
   active: boolean;      // the view is showing
@@ -50,7 +56,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
   const [upload, setUpload] = useState<Upload>();
   const [instructions, setInstructions] = useState("");
   const [labels, setLabels] = useState("");
-  const [model, setModel] = useState<"sam" | "medsam">("sam");
+  const [model, setModel] = useState<Model>("sam");
   const [imageUrl, setImageUrl] = useState("");
   const [diagnosis, setDiagnosis] = useState<Diagnosis>();
   const diagnoseAbort = useRef<AbortController | null>(null);
@@ -106,8 +112,10 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     else if (url) addUrl(url);
   }
 
-  async function start() {
-    if (!canRun || !upload?.url || !upload.preview) return;
+  /** Run the Labeling agent: with the form's settings, or with the areas a diagnosis found. */
+  async function start(areas?: { instructions: string; labels: string[]; model: Model }) {
+    if (!upload?.url || !upload.preview || busy || !available) return;
+    if (!areas && !canRun) return;
     const controller = new AbortController();
     abortRef.current = controller;
     onBusyChange(true);
@@ -119,9 +127,9 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
       const request = {
         image: { url: upload.url, data_url: grid.dataUrl, name: upload.name },
         grid_step: grid.step,
-        model,
-        instructions: instructions.trim(),
-        labels: labels.split(",").map((l) => l.trim()).filter(Boolean),
+        model: areas?.model ?? model,
+        instructions: areas?.instructions ?? instructions.trim(),
+        labels: areas?.labels ?? labels.split(",").map((l) => l.trim()).filter(Boolean),
       };
       for await (const event of streamLabel(request, controller.signal)) {
         if (event.type === "label_result") update((r) => ({ ...r, result: event }));
@@ -151,17 +159,33 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     const controller = new AbortController();
     diagnoseAbort.current = controller;
     setDiagnosis({ text: "", pending: true });
+    let found: Extract<AgentEvent, { type: "diagnosis_regions" }> | undefined;
     try {
       const request = { image: { url: upload.url, data_url: upload.preview, name: upload.name }, context: instructions };
       for await (const event of streamDiagnosis(request, controller.signal)) {
         if (event.type === "token") setDiagnosis((d) => d && { ...d, text: d.text + event.text });
-        else if (event.type === "error") setDiagnosis((d) => d && { ...d, error: event.message });
+        else if (event.type === "diagnosis_regions") {
+          found = event;
+          setDiagnosis((d) => d && { ...d, regions: event.regions });
+        } else if (event.type === "error") setDiagnosis((d) => d && { ...d, error: event.message });
       }
     } catch (e) {
       if ((e as Error).name !== "AbortError") setDiagnosis((d) => d && { ...d, error: (e as Error).message });
     } finally {
       setDiagnosis((d) => d && { ...d, pending: false });
       diagnoseAbort.current = null;
+    }
+    // Show the findings on the image: outline the areas the interpretation describes
+    if (found?.regions.length && !controller.signal.aborted) {
+      const areaModel: Model = found.medical ? "medsam" : "sam";
+      setModel(areaModel);
+      start({
+        instructions:
+          "Outline the areas behind these image findings, every clear example of each:\n" +
+          found.regions.map((r) => `- ${r.label}: ${r.description}`).join("\n"),
+        labels: found.regions.map((r) => r.label),
+        model: areaModel,
+      });
     }
   }
 
@@ -281,7 +305,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
                 <Square size={14} aria-hidden /> Stop
               </button>
             ) : (
-              <button className="label-run" onClick={start} disabled={!canRun}>
+              <button className="label-run" onClick={() => start()} disabled={!canRun}>
                 <ScanSearch size={16} aria-hidden /> Annotate Image
               </button>
             )}
@@ -316,6 +340,14 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
                 <div className="answer"><Markdown remarkPlugins={[remarkGfm]}>{diagnosis.text}</Markdown></div>
               ) : (
                 diagnosis.pending && <p className="label-empty">Looking at the image…</p>
+              )}
+              {diagnosis.regions && diagnosis.regions.length > 0 && (
+                <div className="diagnosis-regions">
+                  <span>{run?.pending ? "Outlining these areas on the image…" : "Areas outlined on the image:"}</span>
+                  {diagnosis.regions.map((r) => (
+                    <span key={r.label} className="chip" title={r.description}>{r.label}</span>
+                  ))}
+                </div>
               )}
               {diagnosis.error && <p className="label-alert"><CircleAlert size={16} aria-hidden /> {diagnosis.error}</p>}
             </section>
