@@ -20,7 +20,7 @@ runs with Postgres instead of DynamoDB, in-memory chat history, no CloudFront, a
 
 | Name in diagrams | What it is |
 |---|---|
-| CloudFront | CDN for `blog-app.sachin-kale.com` and `agent-chat.sachin-kale.com` |
+| CloudFront | CDN for `blog.sachin-kale.com` and `agent.sachin-kale.com` |
 | Edge function | CloudFront Function on every request: IP allow-list, `/api/*` prefix stripping, SPA fallback |
 | Blog API | Lambda `mcp-post-pilot-blog`: FastAPI REST API (`blog-app/backend`) |
 | MCP server | Lambda `mcp-post-pilot-mcp`: MCP over Streamable HTTP, stateless (`blog-app/mcp_server`) |

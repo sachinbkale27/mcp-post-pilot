@@ -27,7 +27,7 @@
     },
     "prompt_file": "prompts/labels.md",
     "images": true,
-    "attachment_base_url": "${BLOG_PUBLIC_URL:-https://blog-app.sachin-kale.com}"
+    "attachment_base_url": "${BLOG_PUBLIC_URL:-https://blog.sachin-kale.com}"
   },
   {
     "name": "factcheck",

@@ -14,6 +14,10 @@ Parameters:
 Resources:
   Certificate:
     Type: AWS::CertificateManager::Certificate
+    # Changing a domain replaces the certificate while CloudFront still uses the old one, so deleting
+    # it would fail and block the update; keep it, and delete it once the main stack has switched.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       DomainName: !Ref BlogDomain
       SubjectAlternativeNames: [!Ref ChatDomain]

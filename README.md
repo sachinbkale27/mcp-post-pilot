@@ -100,7 +100,7 @@ browser ──HTTPS──► CloudFront ── edge function: IP allow-list, /ap
 | `deploy/certificate.yml` | TLS certificate for the custom domains (us-east-1, DNS-validated) |
 | `.github/workflows/deploy.yml` | Build → push to ECR → update Lambdas → upload UIs → refresh CloudFront |
 
-**Live:** blog at https://blog-app.sachin-kale.com, agent chat at https://agent-chat.sachin-kale.com
+**Live:** blog at https://blog.sachin-kale.com, agent chat at https://agent.sachin-kale.com
 (both CloudFront aliases; on the chat domain the edge function serves the chat app at `/`).
 
 **One-time setup**

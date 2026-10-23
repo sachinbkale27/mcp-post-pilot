@@ -6,7 +6,7 @@ sequenceDiagram
     participant API as Blog API (Lambda)
     participant DB as Posts (DynamoDB)
 
-    Author->>UI: Open blog-app.sachin-kale.com/new
+    Author->>UI: Open blog.sachin-kale.com/new
     UI->>CF: GET /new
     CF-->>UI: /index.html from S3 (SPA fallback)
 

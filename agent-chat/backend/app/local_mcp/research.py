@@ -35,7 +35,7 @@ SEARCH_MODEL = os.getenv("OPENAI_SEARCH_MODEL") or os.getenv("OPENAI_MODEL") or 
 MAX_BYTES = 3_000_000
 MAX_REDIRECTS = 5
 TEXT_TYPES = ("text/html", "application/xhtml+xml", "text/plain", "application/json", "application/xml", "text/xml")
-USER_AGENT = "PostPilotFactCheck/1.0 (+https://blog-app.sachin-kale.com)"
+USER_AGENT = "PostPilotFactCheck/1.0 (+https://blog.sachin-kale.com)"
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
 
