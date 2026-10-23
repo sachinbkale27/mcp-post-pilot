@@ -94,7 +94,13 @@ async def test_report_needs_an_exact_quote_from_a_page_fetched_in_this_session(m
 
         await mcp.call_tool("fetch_page", {"url": url, "focus": "70%"})
         made_up = await submit(mcp, {**claim, "evidence": "accounts for 70% of all cystic fibrosis cases"})
-        assert made_up.is_error and "not an exact quote" in made_up.content[0].text
+        assert not made_up.is_error  # refused once already: now recorded as unverified
+        assert "Unverified" in made_up.structured_content["result"]
+        assert "1 verdict(s) were changed to unverified" in made_up.structured_content["result"]
+
+        # "ready to publish" needs every claim supported
+        ready = await mcp.call_tool("submit_report", {"claims": [{"claim": "x", "verdict": "unverified", "evidence": "none"}], "overall": "ready to publish"})
+        assert "**Fact-check: needs fixes**" in ready.structured_content["result"]
 
         accepted = await submit(mcp, {**claim, "source_url": url.rstrip("/"), "evidence": "approximately 70%... CF alleles in the population"})
         assert not accepted.is_error

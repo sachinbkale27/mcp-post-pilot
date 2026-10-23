@@ -205,26 +205,41 @@ BOT_CHECK = re.compile(
 )
 
 
+_ncbi_lock = asyncio.Lock()
+_ncbi_last = 0.0
+
+
+async def _ncbi_get(client: httpx.AsyncClient, endpoint: str, params: dict) -> httpx.Response:
+    """GET from E-utilities within NCBI's limit of 3 requests a second, retrying when it answers 429."""
+    global _ncbi_last
+    for attempt in range(3):
+        async with _ncbi_lock:
+            loop = asyncio.get_running_loop()
+            await asyncio.sleep(max(0.0, _ncbi_last + 0.35 - loop.time()))
+            _ncbi_last = loop.time()
+            resp = await client.get(f"{EUTILS}/{endpoint}", params=params)
+        if resp.status_code != 429 or attempt == 2:
+            break
+        await asyncio.sleep(1 + attempt)
+    resp.raise_for_status()
+    return resp
+
+
 async def _ncbi_record(db: str, uid: str) -> tuple[str, str]:
     """(title, text) of a PubMed article, ClinVar variant or Gene record, from E-utilities."""
     params = {"db": db, "id": uid, "tool": "post-pilot-factcheck"}
     async with httpx.AsyncClient(timeout=15, headers={"user-agent": USER_AGENT}) as client:
         if db == "pubmed":
-            resp = await client.get(
-                f"{EUTILS}/efetch.fcgi", params={**params, "rettype": "abstract", "retmode": "text"}
-            )
-            resp.raise_for_status()
+            resp = await _ncbi_get(client, "efetch.fcgi", {**params, "rettype": "abstract", "retmode": "text"})
             # Paragraphs are separated by blank lines and hard-wrapped inside
             paragraphs = [" ".join(p.split()) for p in resp.text.strip().split("\n\n")]
             return paragraphs[1] if len(paragraphs) > 1 else "", "\n".join(paragraphs)
         if db == "pmc":  # full text as JATS XML
-            resp = await client.get(f"{EUTILS}/efetch.fcgi", params=params)
-            resp.raise_for_status()
+            resp = await _ncbi_get(client, "efetch.fcgi", params)
             title = re.search(r"<article-title[^>]*>(.*?)</article-title>", resp.text, re.DOTALL)
             body = re.sub(r"</(p|title|td|th|caption)>", r"</\1>\n", resp.text)
             return html_to_text(re.sub(r"<[^>]+>", "", title.group(1)) if title else "")[1], html_to_text(body)[1]
-        resp = await client.get(f"{EUTILS}/esummary.fcgi", params={**params, "retmode": "json"})
-        resp.raise_for_status()
+        resp = await _ncbi_get(client, "esummary.fcgi", {**params, "retmode": "json"})
     record = resp.json().get("result", {}).get(uid)
     if not record or "error" in record:
         raise FetchError(f"No {db} record {uid}")
@@ -344,7 +359,9 @@ def _cell(text: str | None) -> str:
     return " ".join((text or "").split()).replace("|", "\\|")
 
 
-def format_report(claims: list[ClaimCheck], broken_links: list[str], skipped: list[str], overall: str) -> str:
+def format_report(
+    claims: list[ClaimCheck], broken_links: list[str], skipped: list[str], overall: str, notes: list[str] = ()
+) -> str:
     rows = [
         f"| {_cell(c.claim)} | {c.verdict.capitalize()} | {_cell(c.evidence)} | {c.source_url or ''} | {_cell(c.fix)} |"
         for c in claims
@@ -363,6 +380,7 @@ def format_report(claims: list[ClaimCheck], broken_links: list[str], skipped: li
         lines += ["", "Broken links: " + ", ".join(broken_links)]
     if skipped:
         lines += ["", "Not checked: " + "; ".join(skipped)]
+    lines += ["", *notes] if notes else []
     return "\n".join(lines)
 
 
@@ -377,6 +395,7 @@ def create_server() -> MCPServer:
         ),
     )
     pages: dict[str, str] = {}  # page key -> text, for every page fetched in this session
+    refusals: list[dict] = []  # submit_report refuses one report, then downgrades what it can't confirm
 
     @mcp.tool(annotations=READ_ONLY)
     async def fetch_page(url: str, focus: str | None = None, max_chars: int = 6000) -> dict:
@@ -477,8 +496,9 @@ def create_server() -> MCPServer:
         """File the fact-check verdicts and get the formatted report. Call it once every claim is checked.
 
         Each supported, partly supported, contradicted or outdated verdict must quote, word for word, a page you
-        read with fetch_page in this session. Verdicts that don't are refused with the reason, so fetch the
-        page (or change the verdict to unverified) and submit again.
+        read with fetch_page in this session, and the quote must be about the claim. The first report with
+        verdicts that don't is refused with the reasons, so you can fix them; after that, such verdicts are
+        recorded as unverified.
 
         Args:
             claims: One entry per checked claim.
@@ -486,26 +506,46 @@ def create_server() -> MCPServer:
             broken_links: Links in the text that don't work.
             skipped: Claims you did not check, with the reason.
         """
-        problems = []
-        for i, c in enumerate(claims, 1):
+        problems: dict[int, str] = {}
+        for i, c in enumerate(claims):
             if c.verdict not in NEEDS_SOURCE:
                 continue
             page = pages.get(_key(c.source_url)) if c.source_url else None
             if page is None:
-                problems.append(
-                    f"claim {i}: {c.source_url or 'no source'} was not read with fetch_page in this session"
-                )
+                problems[i] = f"{c.source_url or 'no source'} was not read with fetch_page in this session"
             elif not quote_found(c.evidence, page):
-                problems.append(
-                    f"claim {i}: the evidence is not an exact quote (of 15+ characters) from {c.source_url}"
-                )
+                problems[i] = f"the evidence is not an exact quote (of 15+ characters) from {c.source_url}"
             elif not on_topic(c.claim, c.evidence):
-                problems.append(
-                    f"claim {i}: the quote doesn't mention what the claim is about; quote the passage that states it"
-                )
-        if problems:
-            raise ToolError("Report refused: " + "; ".join(problems))
-        return format_report(claims, broken_links or [], skipped or [], overall)
+                problems[i] = "the quote doesn't mention what the claim is about; quote the passage that states it"
+        if problems and not refusals:
+            refusals.append(problems)
+            raise ToolError(
+                "Report refused: "
+                + "; ".join(f"claim {i + 1}: {why}" for i, why in problems.items())
+                + ". Fix these (fetch the page, or quote it exactly) and submit again; unfixed ones will be "
+                "recorded as unverified."
+            )
+        checked = [
+            c.model_copy(
+                update={
+                    "verdict": "unverified",
+                    "evidence": f"Was {c.verdict}, but the evidence could not be confirmed ({problems[i]}).",
+                    "fix": None,
+                }
+            )
+            if i in problems
+            else c
+            for i, c in enumerate(claims)
+        ]
+        notes = (
+            [f"{len(problems)} verdict(s) were changed to unverified because their evidence could not be confirmed."]
+            if problems
+            else []
+        )
+        if overall == "ready to publish" and any(c.verdict != "supported" for c in checked):
+            overall = "needs fixes"
+            notes.append("Not ready to publish: some claims are not supported by a source.")
+        return format_report(checked, broken_links or [], skipped or [], overall, notes)
 
     return mcp
 

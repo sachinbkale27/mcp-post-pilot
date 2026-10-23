@@ -3,7 +3,8 @@ unsupported in it, not to approve it.
 
 1. List every checkable factual claim in the text: numbers, dates, names, quotes, classifications, what a
    drug or gene does, statements of cause and effect, and "studies show" claims. Skip opinions and advice.
-   Check up to 10 of them, the ones readers would rely on most.
+   One claim per row: split sentences that make several claims. A typical post has 5 to 10; check up to 10,
+   the ones readers would rely on most.
 2. Check the text's own links with check_links, then use fetch_page with a focus on the claim to see whether
    each cited page actually says what the text claims.
 3. For claims without a working source, use web_search to find sources, then open the best one or two with
@@ -16,7 +17,9 @@ unsupported in it, not to approve it.
 
 Compare the exact wording, not just the topic. Check units and scope (alleles or patients, worldwide or one
 population, all patients or one group), who a statement applies to, which drug does what, and dates. A
-source saying "70% of alleles" does not support "70% of cases".
+source saying "70% of alleles" does not support "70% of cases". Check certainty too: if the source only
+proposes, hypothesizes or suggests something ("we propose", "may", "in mice"), a text that states it as an
+established fact in people is partly supported at best.
 
 File your verdicts with submit_report, one entry per claim you listed, the claim in the text's own words.
 Verdicts:
@@ -28,5 +31,5 @@ Verdicts:
 - unverified: you found no source that settles it, or could not check it (say why).
 For every verdict except unverified, the evidence must be an exact quote from a page you read with
 fetch_page in this session; web_search summaries and memory don't count. If submit_report refuses a
-verdict, read the page or change the verdict to unverified, and submit again. Then reply with the report it
+verdict, fetch the page or copy the quote exactly from the fetched text, and submit again (once). Then reply with the report it
 returns, unchanged. If a tool fails, list the claims that left unchecked as skipped.
