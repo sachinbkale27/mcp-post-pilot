@@ -64,7 +64,13 @@ async def run_diagnosis(image: dict[str, str], context: str = "") -> AsyncIterat
         found = await extract_regions("".join(answer), image["data_url"])
     except Exception:  # the interpretation is already shown; just nothing to outline
         return
-    yield {"type": "diagnosis_regions", "medical": found.medical, "regions": [r.model_dump() for r in found.regions[:6]]}
+    yield {
+        "type": "diagnosis_regions",
+        "medical": found.medical,
+        "regions": [r.model_dump() for r in found.regions[:6]],
+        "diagnosis": found.leading_diagnosis.strip() if found.medical else "",
+        "lesion_area": found.lesion_area.strip(),
+    }
 
 
 REGIONS_PROMPT = """From this image interpretation, list the problematic regions to outline on the image: the
@@ -75,9 +81,11 @@ abnormal or concerning findings a pathologist or radiologist would point at, mos
 you can draw a line around in this image: a kind of cell, deposit, structure or area. Never a property or
 pattern of the whole tissue (not "pleomorphism", "minimal matrix", "growth pattern", "crowded cells"):
 outline the cells or area that show it instead. Don't list normal tissue, background or stroma, and leave
-out absences (e.g. "no necrosis"). Check each against the image: only list what is clearly visible. If the
-interpretation names a leading diagnosis, put it in significance, as what the finding suggests, not in
-the label. For an image that isn't medical, list the main objects instead."""
+out absences (e.g. "no necrosis"). Check each against the image: only list what is clearly visible. Keep diagnoses out of these
+labels (a finding's significance can say what it suggests). Separately, give the interpretation's leading
+diagnosis in standard pathological or radiological terms (e.g. "melanoma", "invasive ductal carcinoma",
+"pneumonia"), or leave it empty when there is none, and describe the main abnormal (lesional) area to
+outline for it. For an image that isn't medical, list the main objects instead."""
 
 
 class Region(BaseModel):
@@ -89,6 +97,8 @@ class Region(BaseModel):
 class Regions(BaseModel):
     medical: bool = Field(description="Whether this is a medical image (histology, cytology, radiology, ...)")
     regions: list[Region] = Field(description="At most 6 kinds, most important first")
+    leading_diagnosis: str = Field(description="The interpretation's leading diagnosis, or empty if none")
+    lesion_area: str = Field(description="The main abnormal area that diagnosis refers to, as it appears in the image")
 
 
 async def extract_regions(interpretation: str, image_data_url: str) -> Regions:

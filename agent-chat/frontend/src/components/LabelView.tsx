@@ -39,6 +39,7 @@ interface Diagnosis {
   pending: boolean;
   error?: string;
   regions?: DiagnosisRegion[];
+  suspected?: string;
 }
 
 type Model = "sam" | "medsam";
@@ -172,7 +173,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
         if (event.type === "token") setDiagnosis((d) => d && { ...d, text: d.text + event.text });
         else if (event.type === "diagnosis_regions") {
           found = event;
-          setDiagnosis((d) => d && { ...d, regions: event.regions });
+          setDiagnosis((d) => d && { ...d, regions: event.regions, suspected: event.diagnosis });
         } else if (event.type === "error") setDiagnosis((d) => d && { ...d, error: event.message });
       }
     } catch (e) {
@@ -184,14 +185,23 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     // Show the findings on the image: outline the areas the interpretation describes
     if (found?.regions.length && !controller.signal.aborted) {
       const areaModel: Model = found.medical ? "medsam" : "sam";
+      // The leading diagnosis goes on the lesional area as one outline, visibly marked as AI-suspected;
+      // the findings keep their descriptive labels
+      const suspected = found.diagnosis ? `Suspected ${found.diagnosis} (AI)` : "";
+      const lesion = suspected
+        ? `First, one outline labelled "${suspected}" around the main abnormal area: ${found.lesion_area}. ` +
+          "Use one box around that whole area (it may cover most of the image), confidence \"low\", and the note " +
+          "\"AI interpretation, not a diagnosis: needs pathologist review\".\n"
+        : "";
       setModel(areaModel);
       start({
         instructions:
-          "Outline the problematic regions behind these findings. For each finding, outline several clear " +
+          lesion +
+          "Then outline the problematic regions behind these findings. For each finding, outline several clear " +
           "examples spread over the image (at least 3 when there are many, up to 20 outlines in all), each box " +
           "tight around one example. Put each finding's significance in the annotation notes.\n" +
           found.regions.map((r) => `- ${r.label}: ${r.description}. Significance: ${r.significance}`).join("\n"),
-        labels: found.regions.map((r) => r.label),
+        labels: [...(suspected ? [suspected] : []), ...found.regions.map((r) => r.label)],
         model: areaModel,
       });
     }
@@ -352,6 +362,12 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
           {diagnosis?.regions && diagnosis.regions.length > 0 && (
             <div className="diagnosis-regions">
               <h4>Problematic regions</h4>
+              {diagnosis.suspected && (
+                <p className="diagnosis-suspected">
+                  Outlined as <strong>Suspected {diagnosis.suspected} (AI)</strong>: the AI's leading interpretation,
+                  not a diagnosis. It needs confirmation by a pathologist.
+                </p>
+              )}
               <ul>
                 {diagnosis.regions.map((r) => (
                   <li key={r.label} title={r.description}><strong>{r.label}</strong>: {r.significance}</li>

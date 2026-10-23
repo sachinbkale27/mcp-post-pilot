@@ -27,7 +27,12 @@ def test_streams_the_interpretation_with_the_image_and_context(monkeypatch):
     async def fake_regions(text, image_data_url):
         seen.append(text)
         assert image_data_url == IMAGE["data_url"]
-        return Regions(medical=True, regions=[Region(label="melanophage", description="cells packed with brown pigment", significance="melanin in a melanocytic lesion")])
+        return Regions(
+            medical=True,
+            regions=[Region(label="melanophage", description="cells packed with brown pigment", significance="melanin in a melanocytic lesion")],
+            leading_diagnosis="melanoma",
+            lesion_area="the sheet of pigmented atypical cells filling the field",
+        )
 
     monkeypatch.setattr(diagnose, "extract_regions", fake_regions)
     with TestClient(main.app) as client:
@@ -35,6 +40,7 @@ def test_streams_the_interpretation_with_the_image_and_context(monkeypatch):
     assert body.count("event: token") == 2 and "H&E histology" in body and body.rstrip().endswith("data: {}")
     assert seen == ["## What the image shows\nH&E histology"]  # the regions come from the whole interpretation
     assert "event: diagnosis_regions" in body and '"medical":true' in body.replace(" ", "") and "melanophage" in body
+    assert '"diagnosis":"melanoma"' in body.replace(" ", "")
     system, human = model.messages
     assert "not a medical diagnosis" in system.content
     text, image = human.content
