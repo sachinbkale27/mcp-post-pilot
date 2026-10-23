@@ -616,3 +616,24 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 .capabilities-intro a { color: var(--accent); font-weight: 600; }
 @media (max-width: 520px) { .trials-row { grid-template-columns: 1fr; } }
 .trials-options .chip { padding: 5px 10px; font-size: 12.5px; }
+
+/* ---- clinical trials guide ---- */
+.trials-guide { display: grid; gap: 6px; margin-bottom: 14px; }
+.trials-guide-intro { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 6px; color: var(--text-2); font-size: 13.5px; }
+.trials-guide-intro svg { flex: none; margin-top: 2px; color: var(--accent); }
+.guide-entry { border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); }
+.guide-entry.open { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: var(--accent-soft); }
+.guide-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 12px; border: 0; background: none;
+  color: var(--text); font: 600 13.5px/1.3 var(--font-ui); text-align: left; cursor: pointer;
+}
+.guide-head svg { flex: none; color: var(--accent); transition: transform 0.15s; }
+.guide-entry.open .guide-head .chevron { transform: rotate(90deg); }
+.guide-body { padding: 0 12px 10px 35px; color: var(--text-2); font-size: 13px; line-height: 1.55; }
+.guide-body p { margin: 0 0 6px; }
+.guide-body strong { color: var(--text); }
+.guide-body ul { margin: 0; padding-left: 16px; }
+.guide-body li + li { margin-top: 3px; }
+.guide-examples { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.guide-examples .chip { font-size: 12px; }
+.label-intro .link-btn { display: inline-flex; align-items: center; gap: 6px; }

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CircleAlert, FlaskConical, LoaderCircle, RotateCcw, Search, Square, UserRound } from "lucide-react";
+import { CircleAlert, CircleHelp, FlaskConical, LoaderCircle, RotateCcw, Search, Square, UserRound } from "lucide-react";
 import { streamTrials } from "../api";
 import { applyEvent } from "../lib/events";
 import { filedTrials } from "../lib/tools";
 import { AgentCard, type Step } from "./Messages";
 import { TrialCards } from "./TrialCards";
+import { type GuideStep, TrialsGuide } from "./TrialsGuide";
 
 type Status = "recruiting" | "open" | "all";
 type Sex = "" | "female" | "male";
@@ -94,6 +95,10 @@ interface Props {
 export function TrialsView({ available, unavailableReason, busy, onBusyChange, prefill }: Props) {
   const [form, setForm] = useState<TrialForm>(EMPTY);
   const [showPatient, setShowPatient] = useState(false);
+  const [guideStep, setGuideStep] = useState<GuideStep>("condition");
+  const [showGuide, setShowGuide] = useState(false); // after a search; before one, the guide fills the results panel
+  // The guide follows the form: focusing or clicking a part opens its help
+  const guide = (step: GuideStep) => ({ onFocusCapture: () => setGuideStep(step), onClickCapture: () => setGuideStep(step) });
   const [run, setRun] = useState<Run>();
   const abortRef = useRef<AbortController | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -122,6 +127,8 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
 
   async function search() {
     if (!canRun) return;
+    setShowGuide(false);
+    setGuideStep("results");
     const controller = new AbortController();
     abortRef.current = controller;
     onBusyChange(true);
@@ -156,6 +163,11 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
           matched and what the trial team must confirm. For a specific patient, it also leaves out trials whose criteria
           rule them out.
         </p>
+        {run && (
+          <button className="link-btn" onClick={() => setShowGuide(!showGuide)} aria-expanded={showGuide}>
+            <CircleHelp size={14} aria-hidden /> {showGuide ? "Hide the guide" : "How to use this page"}
+          </button>
+        )}
       </header>
 
       {!available && (
@@ -168,23 +180,21 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
         <section className="label-panel" aria-labelledby="trials-form-heading">
           <h3 id="trials-form-heading">1. What are you looking for?</h3>
           <small className="label-hint">Only the disease is required; every detail you add narrows the search.</small>
-          <label className="label-field">
+          <label className="label-field" {...guide("condition")}>
             <span>Disease or condition</span>
             <input className="label-input" value={form.condition} placeholder="e.g. breast cancer, type 2 diabetes, asthma"
               onChange={(e) => set({ condition: e.target.value })} disabled={busy} />
           </label>
-          <label className="label-field">
+          <label className="label-field" {...guide("test")}>
             <span>Lab test result <em>(if known)</em></span>
             <input className="label-input" value={form.biomarker} placeholder="e.g. HER2-positive, EGFR, BRAF V600E"
               aria-describedby="trials-biomarker-help" onChange={(e) => set({ biomarker: e.target.value })} disabled={busy} />
             <small id="trials-biomarker-help" className="label-hint">
-              Some diseases, especially cancers, are split into types by a lab test on the tumour or blood, for
-              example "HER2-positive" breast cancer. Many trials only take one type. Copy the result from your
-              pathology or genetic test report (doctors may call it a biomarker or mutation). Leave it blank if you're
-              not sure.
+              Mostly for cancers, e.g. "HER2-positive" breast cancer: copy it from your pathology or genetic test
+              report. Leave it blank if you're not sure.
             </small>
           </label>
-          <label className="label-field">
+          <label className="label-field" {...guide("treatment")}>
             <span>A treatment you're interested in <em>(optional)</em></span>
             <input className="label-input" value={form.drug} placeholder="e.g. immunotherapy, pembrolizumab"
               aria-describedby="trials-drug-help" onChange={(e) => set({ drug: e.target.value })} disabled={busy} />
@@ -192,7 +202,7 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
           </label>
 
           <h3>2. Where?</h3>
-          <div className="trials-row">
+          <div className="trials-row" {...guide("place")}>
             <label className="label-field">
               <span>City or country</span>
               <input ref={locationRef} className="label-input" value={form.location} placeholder="Blank: worldwide"
@@ -208,7 +218,7 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
           </div>
 
           <h3>3. Which trials?</h3>
-          <div className="label-field">
+          <div className="label-field" {...guide("status")}>
             <span id="trials-status">Status</span>
             <div className="trials-options" role="radiogroup" aria-labelledby="trials-status">
               {STATUSES.map(([value, text, help]) => (
@@ -219,7 +229,7 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
               ))}
             </div>
           </div>
-          <div className="label-field">
+          <div className="label-field" {...guide("phase")}>
             <span id="trials-phase">Phase <em>(none: any phase)</em></span>
             <div className="trials-options" role="group" aria-labelledby="trials-phase">
               {PHASES.map((p) => (
@@ -232,11 +242,11 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
             <small className="label-hint">Phase 1 tests safety, phase 2 whether it works, phase 3 compares it with the standard treatment.</small>
           </div>
 
-          <button className="link-btn trials-patient-toggle" onClick={() => setShowPatient(!showPatient)} aria-expanded={showPatient}>
+          <button className="link-btn trials-patient-toggle" onClick={() => { setShowPatient(!showPatient); setGuideStep("patient"); }} aria-expanded={showPatient}>
             <UserRound size={14} aria-hidden /> {showPatient ? "Hide patient details" : "For a specific patient? Add details (optional)"}
           </button>
           {showPatient && (
-            <div className="trials-patient">
+            <div className="trials-patient" {...guide("patient")}>
               <div className="trials-row">
                 <label className="label-field">
                   <span>Age</span>
@@ -269,7 +279,7 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
             <p>{question}</p>
           </div>
 
-          <div className="label-examples">
+          <div className="label-examples" {...guide("try")}>
             {EXAMPLES.map((ex) => (
               <button key={ex.title} className="chip" disabled={busy}
                 onClick={() => { setForm({ ...EMPTY, ...ex.form }); setShowPatient(!!(ex.form.age || ex.form.details)); }}>
@@ -297,19 +307,8 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
         </section>
 
         <section className="label-panel label-output" aria-live="polite" aria-labelledby="trials-result-heading">
-          <h3 id="trials-result-heading">Results</h3>
-          {!run && (
-            <div className="label-empty trials-help">
-              <p>Matching trials appear here, usually within 20 to 60 seconds. Each card shows:</p>
-              <ul>
-                <li><strong>Status and phase</strong>: hover over a badge for what it means.</li>
-                <li><strong>Why this matched</strong>, quoted from the trial's registry record.</li>
-                <li><strong>Check with the trial team</strong>: criteria only they can confirm.</li>
-                <li>The <strong>nearest site</strong> and a link to the full registry entry.</li>
-              </ul>
-              <p>Tips: use the standard name of the condition, add a biomarker if there is one, and widen the distance if nothing turns up.</p>
-            </div>
-          )}
+          <h3 id="trials-result-heading">{run ? "Results" : "Guide"}</h3>
+          {(!run || showGuide) && <TrialsGuide active={guideStep} onSelect={setGuideStep} />}
 
           <div ref={resultRef} className="label-result-anchor">
             {summary && <p className="trials-summary">{summary}</p>}
