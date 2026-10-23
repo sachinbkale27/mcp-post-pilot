@@ -174,13 +174,14 @@ export function TrialsView({ available, unavailableReason, busy, onBusyChange, p
               onChange={(e) => set({ condition: e.target.value })} disabled={busy} />
           </label>
           <label className="label-field">
-            <span>Test result or gene change <em>(if known)</em></span>
+            <span>Lab test result <em>(if known)</em></span>
             <input className="label-input" value={form.biomarker} placeholder="e.g. HER2-positive, EGFR, BRAF V600E"
               aria-describedby="trials-biomarker-help" onChange={(e) => set({ biomarker: e.target.value })} disabled={busy} />
             <small id="trials-biomarker-help" className="label-hint">
-              Some diseases, especially cancers, are split into types by a lab test on the tumour or blood, and many
-              trials only take one type. You'll find it on the pathology or genetic test report (it may be called a
-              biomarker or mutation). Leave it blank if you're not sure.
+              Some diseases, especially cancers, are split into types by a lab test on the tumour or blood, for
+              example "HER2-positive" breast cancer. Many trials only take one type. Copy the result from your
+              pathology or genetic test report (doctors may call it a biomarker or mutation). Leave it blank if you're
+              not sure.
             </small>
           </label>
           <label className="label-field">
