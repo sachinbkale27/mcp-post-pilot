@@ -108,7 +108,7 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
   return (
     <div className="label-view">
       <header className="label-intro">
-        <h2><ScanSearch size={22} aria-hidden /> Label images</h2>
+        <h2><ScanSearch size={22} aria-hidden /> Annotate Images</h2>
         <p>
           Upload a photo and say what to label. The Labeling agent saves it in Image Label, draws polygons or
           circles around what you asked for, and you can download the result as COCO or YOLO training data.
@@ -186,7 +186,7 @@ export function LabelView({ available, unavailableReason, busy, onBusyChange }: 
               </button>
             ) : (
               <button className="label-run" onClick={start} disabled={!canRun}>
-                <ScanSearch size={16} aria-hidden /> Label image
+                <ScanSearch size={16} aria-hidden /> Annotate Image
               </button>
             )}
             {run && !busy && (

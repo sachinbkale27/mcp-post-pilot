@@ -106,7 +106,7 @@ export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, 
         </button>
         {labelingAvailable && (
           <button className={view === "label" ? "active" : undefined} onClick={() => onViewChange("label")} aria-current={view === "label" ? "page" : undefined}>
-            <ScanSearch size={16} aria-hidden /> Label images
+            <ScanSearch size={16} aria-hidden /> Annotate Images
           </button>
         )}
       </nav>

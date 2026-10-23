@@ -35,6 +35,11 @@ const IMAGE_CAPABILITIES = [
   },
 ];
 
+/** #annotate (or the earlier #label) opens the annotation view. */
+function viewFromHash(): View {
+  return location.hash === "#annotate" || location.hash === "#label" ? "label" : "chat";
+}
+
 export function App() {
   const [info, setInfo] = useState<AgentsInfo>();
   const [infoError, setInfoError] = useState<string>();
@@ -47,20 +52,20 @@ export function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const busy = turns.some((t) => t.pending);
-  const [view, setView] = useState<View>(() => (location.hash === "#label" ? "label" : "chat"));
+  const [view, setView] = useState<View>(viewFromHash);
   const [labeling, setLabeling] = useState(false);
   const labelsAgent = info?.agents.find((a) => a.name === "labels");
 
-  // #label opens the labeling view, so it can be linked to and survives a reload
+  // #annotate opens the annotation view, so it can be linked to and survives a reload
   useEffect(() => {
-    const onHash = () => setView(location.hash === "#label" ? "label" : "chat");
+    const onHash = () => setView(viewFromHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
   function openView(next: View) {
     setView(next);
     setSidebarOpen(false);
-    history.replaceState(null, "", next === "label" ? "#label" : location.pathname + location.search);
+    history.replaceState(null, "", next === "label" ? "#annotate" : location.pathname + location.search);
   }
 
   const loadInfo = () => {
@@ -71,7 +76,7 @@ export function App() {
 
   useEffect(() => {
     const first = turns[0] && (turns[0].user || "Images");
-    const title = view === "label" ? "Label images" : first && first.slice(0, 40);
+    const title = view === "label" ? "Annotate Images" : first && first.slice(0, 40);
     document.title = title ? `${title} · Post Pilot Agent` : "Post Pilot Agent";
   }, [turns, view]);
 
@@ -159,7 +164,7 @@ export function App() {
           </button>
           <div className="only-mobile"><Brand /></div>
           <h1 className="topbar-title hide-mobile">
-            {view === "label" ? "Label images" : turns[0] ? turns[0].user || "Images" : "New conversation"}
+            {view === "label" ? "Annotate Images" : turns[0] ? turns[0].user || "Images" : "New conversation"}
           </h1>
           {info && <span className="model-chip"><Sparkles size={13} aria-hidden /> {info.model}</span>}
         </header>
@@ -202,7 +207,7 @@ export function App() {
                     , and the Labeling agent annotates your images in{" "}
                     <a href="https://labels.sachin-kale.com" target="_blank" rel="noreferrer">Image Label</a> and exports
                     COCO or YOLO training data (try{" "}
-                    <a href="#label" onClick={(e) => { e.preventDefault(); openView("label"); }}>Label images</a>)
+                    <a href="#annotate" onClick={(e) => { e.preventDefault(); openView("label"); }}>Annotate Images</a>)
                   </>
                 ) : null}
                 {info?.agents.some((a) => a.name === "factcheck")
