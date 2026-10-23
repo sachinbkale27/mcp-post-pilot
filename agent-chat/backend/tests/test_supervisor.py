@@ -144,11 +144,11 @@ def test_shipped_agents_json_is_valid(monkeypatch):
     entries = json.loads(path.read_text())
     monkeypatch.delenv("LABELS_MCP_URL", raising=False)
     monkeypatch.delenv("LABELS_MCP_TOKEN", raising=False)
-    assert [a.name for a in parse_agents(entries, path.parent)] == ["blog", "genetics"]  # labels not provisioned
+    assert [a.name for a in parse_agents(entries, path.parent)] == ["blog", "genetics", "factcheck"]  # labels not provisioned
 
     monkeypatch.setenv("LABELS_MCP_URL", "https://labels.test/mcp")
     monkeypatch.setenv("LABELS_MCP_TOKEN", "tok")
-    labels = parse_agents(entries, path.parent)[-1]
+    labels = next(a for a in parse_agents(entries, path.parent) if a.name == "labels")
     assert (labels.name, labels.headers, labels.attachment_base_url) == (
         "labels", {"authorization": "Bearer tok"}, "https://blog-app.sachin-kale.com"
     )

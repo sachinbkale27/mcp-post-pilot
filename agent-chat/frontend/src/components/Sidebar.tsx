@@ -26,7 +26,7 @@ export function Brand() {
 
 function host(url: string) {
   try {
-    return new URL(url).host;
+    return new URL(url).host || url; // "local:research" (in-process) has no host
   } catch {
     return url;
   }

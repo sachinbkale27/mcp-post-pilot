@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Dna, FilePlus2, ImagePlus, ListChecks, Menu, Microscope, Sparkles, WandSparkles } from "lucide-react";
+import { Dna, ImagePlus, ListChecks, Menu, Microscope, SearchCheck, Sparkles, WandSparkles } from "lucide-react";
 import { BLOG_URL, getAgents, resetChat, streamChat, uploadImage, type AgentEvent, type AgentsInfo } from "./api";
 import { Composer, MAX_ATTACHMENTS, type Attachment } from "./components/Composer";
 import { prepareImage } from "./lib/images";
@@ -13,7 +13,7 @@ const SUGGESTIONS = [
     icon: Dna, title: "Research, then write",
     prompt: "Research the CFTR F508del variant (ClinVar classification, what CFTR does, one recent paper on CFTR modulators), then write a short draft blog post about it with the sources, by sachin.",
   },
-  { icon: FilePlus2, title: "Draft a post", prompt: "Write a short draft post explaining how MCP tools work, by sachin." },
+  { icon: SearchCheck, title: "Fact-check a post", prompt: "Fact-check the latest published post and tell me what, if anything, needs fixing." },
 ];
 
 const IMAGE_ONLY_PROMPT = "Here are some images.";
@@ -205,6 +205,9 @@ export function App() {
                     COCO or YOLO training data
                   </>
                 ) : null}
+                {info?.agents.some((a) => a.name === "factcheck")
+                  ? ", and the Fact-check agent verifies claims and links against web sources"
+                  : null}
                 .
                 I hand each part of your request to the right agent, combine their results, and you see
                 every delegation and tool call as it happens.

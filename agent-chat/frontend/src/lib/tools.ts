@@ -1,7 +1,7 @@
 /** How agent tool calls are presented: kind, icon and plain-language labels. */
 import {
-  BookOpen, ChartColumn, Dna, Eraser, FileDown, FilePen, FilePlus2, FileSearch, FileText, ImageUp, Images, Library, List,
-  type LucideIcon, Microscope, PenTool, Replace, Send, Tags, Trash2, Undo2, WandSparkles, Wrench,
+  BookOpen, ChartColumn, Dna, Eraser, FileDown, FilePen, FilePlus2, FileSearch, FileText, Globe, ImageUp, Images, Library, Link2, List,
+  type LucideIcon, Microscope, PenTool, Replace, SearchCheck, Send, Tags, Trash2, Undo2, WandSparkles, Wrench,
 } from "lucide-react";
 
 export type ToolKind = "read" | "write" | "destructive";
@@ -16,6 +16,14 @@ interface ToolMeta {
 type Args = Record<string, unknown>;
 
 const post = (a: Args) => (a.post_id !== undefined ? `post #${a.post_id}` : "post");
+const site = (v: unknown) => {
+  try {
+    return new URL(String(v)).host.replace(/^www\./, "");
+  } catch {
+    return "a page";
+  }
+};
+const count = (v: unknown, noun: string) => (Array.isArray(v) ? `${v.length} ${noun}${v.length === 1 ? "" : "s"}` : `${noun}s`);
 const quoted = (v: unknown) => (typeof v === "string" && v ? `“${v.length > 48 ? v.slice(0, 47) + "…" : v}”` : "");
 
 const TOOLS: Record<string, ToolMeta> = {
@@ -89,6 +97,22 @@ const TOOLS: Record<string, ToolMeta> = {
     kind: "read", icon: FileDown,
     running: (a) => `Exporting ${String(a.format ?? "coco").toUpperCase()}`,
     done: (a) => `Exported ${String(a.format ?? "coco").toUpperCase()}`,
+  },
+  // research MCP server (fact-check agent)
+  web_search: {
+    kind: "read", icon: SearchCheck,
+    running: (a) => `Searching the web for ${quoted(a.query)}`,
+    done: (a) => `Searched the web for ${quoted(a.query)}`,
+  },
+  fetch_page: {
+    kind: "read", icon: Globe,
+    running: (a) => `Reading ${site(a.url)}${a.focus ? ` for ${quoted(a.focus)}` : ""}`,
+    done: (a) => `Read ${site(a.url)}${a.focus ? ` for ${quoted(a.focus)}` : ""}`,
+  },
+  check_links: {
+    kind: "read", icon: Link2,
+    running: (a) => `Checking ${count(a.urls, "link")}`,
+    done: (a) => `Checked ${count(a.urls, "link")}`,
   },
 };
 

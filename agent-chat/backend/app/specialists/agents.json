@@ -28,5 +28,13 @@
     "prompt_file": "prompts/labels.md",
     "images": true,
     "attachment_base_url": "${BLOG_PUBLIC_URL:-https://blog-app.sachin-kale.com}"
+  },
+  {
+    "name": "factcheck",
+    "title": "Fact-check agent",
+    "description": "Checks facts independently: splits a text (a draft post, an answer, a claim) into factual claims and verifies each against web sources it reads itself, and checks the text's links. Returns a verdict per claim (supported, partly supported, contradicted, outdated, unverified), each backed by a quote from a source. It cannot read posts itself: put the complete text to check in the task, word for word, links included. A summary cannot be fact-checked.",
+    "mcp_url": "${FACTCHECK_MCP_URL:-local:research}",
+    "prompt_file": "prompts/factcheck.md",
+    "report_tool": "submit_report"
   }
 ]

@@ -7,10 +7,13 @@ agents.json (path overridable with AGENTS_CONFIG); adding an agent means adding 
     title        shown in the chat UI
     description  what it can do; the supervisor routes tasks by this
     mcp_url      its MCP server (Streamable HTTP). ${VAR} and ${VAR:-default} read the environment;
-                 an agent whose URL expands to "" is disabled
+                 an agent whose URL expands to "" is disabled. "local:<name>" is a server that runs
+                 in this process (app/local_mcp)
     headers      extra HTTP headers for its MCP server, e.g. a shared secret; empty values are dropped
     prompt_file  its instructions, relative to agents.json
     images       whether it sees images the user attaches (default false)
+    report_tool  a tool of its MCP server that must accept the agent's result (e.g. one that validates it);
+                 its output becomes the report the supervisor sees
     attachment_base_url
                  base URL for attachment paths (/media/...), for agents whose MCP server has to
                  download attached images itself
@@ -42,6 +45,7 @@ class AgentSpec:
     headers: dict[str, str] = field(default_factory=dict)
     images: bool = False
     attachment_base_url: str = ""
+    report_tool: str = ""
 
     @property
     def tool_name(self) -> str:
@@ -72,6 +76,7 @@ def parse_agents(entries: list[dict], base_dir: Path) -> tuple[AgentSpec, ...]:
                 headers={key: value for key, value in headers.items() if value},
                 images=bool(entry.get("images", False)),
                 attachment_base_url=_expand(entry.get("attachment_base_url", "")).rstrip("/"),
+                report_tool=entry.get("report_tool", ""),
             )
         )
     if not specs:

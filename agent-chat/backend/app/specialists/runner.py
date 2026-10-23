@@ -23,6 +23,7 @@ from mcp.client.client import Client
 from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 from mcp_types import Tool as MCPTool
 
+from ..local_mcp import local_server
 from . import AgentSpec
 
 Emit = Callable[[dict[str, Any]], None]
@@ -39,6 +40,10 @@ Never invent URLs: only use links that tools returned."""
 @asynccontextmanager
 async def connect(spec: AgentSpec):
     """Open an MCP client session (connect, initialize) to the agent's MCP server."""
+    if spec.mcp_url.startswith("local:"):  # a server in this process (app/local_mcp)
+        async with Client(local_server(spec.mcp_url.removeprefix("local:"))) as client:
+            yield client
+        return
     if not spec.headers:
         async with Client(spec.mcp_url) as client:
             yield client
@@ -114,6 +119,12 @@ def task_message(spec: AgentSpec, task: str, user_text: str, images: list[dict[s
     return HumanMessage(parts)
 
 
+REPORT_REMINDER = (
+    "You have not filed your result with {tool} yet, or it was refused. Call {tool} now (fix what it refused), "
+    "then reply with what it returns."
+)
+
+
 async def run_specialist(
     spec: AgentSpec,
     *,
@@ -124,21 +135,46 @@ async def run_specialist(
     delegation_id: str,
     emit: Emit,
 ) -> str:
-    """Do one task with the agent's MCP tools and return its report. Tool calls are emitted as they happen."""
+    """Do one task with the agent's MCP tools and return its report. Tool calls are emitted as they happen.
+
+    For an agent with a report_tool, the report is what that tool returned: the agent is reminded (twice at
+    most) until the tool accepts a report, so the supervisor gets the checked result, not a paraphrase.
+    """
     async with connect(spec) as mcp:
         tools = [mcp_tool_to_openai(t) for t in (await mcp.list_tools()).tools]
         graph = build_graph(model, mcp, tools, f"{spec.prompt}\n\n{SPECIALIST_RULES}")
-        state = {"messages": [task_message(spec, task, user_text, images)]}
         config = {"recursion_limit": 25, "run_name": f"{spec.name}-agent"}
-        messages: list[BaseMessage] = []
-        async for update in graph.astream(state, config, stream_mode="updates"):
-            for delta in update.values():
-                for message in delta["messages"]:
-                    messages.append(message)
-                    for event in tool_events(message):
-                        emit({**event, "agent": spec.name, "delegation": delegation_id})
-    final = messages[-1] if messages else None
-    return final.text if isinstance(final, AIMessage) and final.text else "The agent finished without a report."
+        messages: list[BaseMessage] = [task_message(spec, task, user_text, images)]
+        for attempt in range(3):
+            async for update in graph.astream({"messages": messages}, config, stream_mode="updates"):
+                for delta in update.values():
+                    for message in delta["messages"]:
+                        messages.append(message)
+                        for event in tool_events(message):
+                            emit({**event, "agent": spec.name, "delegation": delegation_id})
+            if not spec.report_tool:
+                break
+            if (report := filed_report(messages, spec.report_tool)) is not None:
+                return report
+            if attempt < 2:
+                messages.append(HumanMessage(REPORT_REMINDER.format(tool=spec.report_tool)))
+    final = messages[-1]
+    text = final.text if isinstance(final, AIMessage) and final.text else "The agent finished without a report."
+    if spec.report_tool:
+        return f"(This report was not accepted by {spec.report_tool}, so it is unchecked.)\n\n{text}"
+    return text
+
+
+def filed_report(messages: list[BaseMessage], tool: str) -> str | None:
+    """The output of the last successful call of the report tool, if any."""
+    for message in reversed(messages):
+        if isinstance(message, ToolMessage) and message.name == tool and message.status == "success":
+            try:
+                content = json.loads(message.content)
+            except (TypeError, ValueError):
+                return str(message.content)
+            return content.get("result", json.dumps(content)) if isinstance(content, dict) else str(content)
+    return None
 
 
 def tool_events(message: BaseMessage):

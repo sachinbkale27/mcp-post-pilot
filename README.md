@@ -146,9 +146,11 @@ canonical form, and the deploy never deletes `media/` from the bucket.
 ## Multiple agents
 
 ```
-user ─▶ Supervisor ─┬─ ask_blog(task)     ─▶ Blog agent     ⇄ blog MCP server
-                    ├─ ask_genetics(task) ─▶ Genetics agent ⇄ genetics MCP server
-                    └─ ask_<name>(task)   ─▶ …any agent listed in agents.json
+user ─▶ Supervisor ─┬─ ask_blog(task)      ─▶ Blog agent       ⇄ blog MCP server
+                    ├─ ask_genetics(task)  ─▶ Genetics agent   ⇄ genetics MCP server
+                    ├─ ask_labels(task)    ─▶ Labeling agent   ⇄ label-image MCP server
+                    ├─ ask_factcheck(task) ─▶ Fact-check agent ⇄ research MCP server (in-process)
+                    └─ ask_<name>(task)    ─▶ …any agent listed in agents.json
 ```
 
 - **Routing.** Each specialist is one tool of the supervisor, described by its `description`. The
@@ -170,8 +172,32 @@ user ─▶ Supervisor ─┬─ ask_blog(task)     ─▶ Blog agent     ⇄ bl
 
   `${VAR}` and `${VAR:-default}` read the environment (Parameter Store on AWS); an agent whose URL
   is empty is disabled. The sidebar (`GET /agents`) shows each agent's MCP server and tools.
+- **In-process servers.** `"mcp_url": "local:<name>"` runs an MCP server from `app/local_mcp/` inside the
+  agent service, over an in-memory connection: no deployment of its own. Each delegation gets a fresh
+  server instance, so it can keep state for that one task.
+- **Checked reports.** `"report_tool": "<tool>"` makes an agent file its result through that tool. The
+  agent is sent back (twice at most) until the tool accepts it, and the supervisor gets the tool's output
+  instead of the agent's own wording.
 - **Events.** `agent_start` / `agent_end` wrap each delegation, and specialist `tool_call` / `tool_result`
   events carry `agent` and `delegation`, so the UI nests them under the right agent.
+
+## Fact-check agent
+
+Checks a text (a draft post, an answer) claim by claim against sources it reads itself, using the
+in-process research MCP server (`agent-chat/backend/app/local_mcp/research.py`):
+
+| Tool | What it does |
+|---|---|
+| `web_search(query)` | Finds sources with OpenAI's web search tool (the agent's own key); the summary is only a lead |
+| `fetch_page(url, focus?)` | Reads a page as text, or just the sentences about `focus`. PubMed, PMC, ClinVar and NCBI Gene links are read through NCBI E-utilities, because NCBI shows scripts a bot check. Other sites' bot checks are reported as "blocked", never read as content |
+| `check_links(urls)` | Status and final URL of each link |
+| `submit_report(claims, overall)` | Accepts a verdict that cites a source (supported, partly supported, contradicted, outdated) only if that page was fetched in this delegation, the evidence is an exact quote from it, and the quote is about the claim |
+
+Pages are fetched from the public internet only: non-HTTP schemes, other ports, credentials in URLs and
+private, loopback or link-local addresses are refused, and every redirect is checked again.
+
+Try: *"Fact-check post 12 and tell me what needs fixing"*, or *"Fact-check post 12, fix what it finds,
+and show me the changes"*. The supervisor fetches the text through the Blog agent first.
 
 ## How it works
 
