@@ -141,7 +141,7 @@ export function AgentCard({ step }: { step: AgentStep }) {
           {step.tools.map((tool) => <ToolCard key={tool.id} step={tool} />)}
         </div>
       )}
-      {trials && <TrialCards trials={trials} />}
+      {trials && <TrialCards trials={trials.trials} notes={trials.notes} />}
     </div>
   );
 }

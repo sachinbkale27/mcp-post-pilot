@@ -26,8 +26,8 @@ const statusClass = (status: string) =>
   status === "Recruiting" ? "open" : status === "Not yet recruiting" || status === "Enrolling by invitation" ? "soon" : "closed";
 
 /** The trials the Clinical Trials agent filed: registry facts, plus why each matched and what to confirm. */
-export function TrialCards({ trials }: { trials: Trial[] }) {
-  if (trials.length === 0) return null;
+export function TrialCards({ trials, notes }: { trials: Trial[]; notes: string[] }) {
+  if (trials.length === 0 && notes.length === 0) return null;
   return (
     <section className="trials" aria-label="Clinical trials">
       {trials.map((t) => {
@@ -86,6 +86,9 @@ export function TrialCards({ trials }: { trials: Trial[] }) {
           </article>
         );
       })}
+      {notes.length > 0 && (
+        <ul className="trials-notes">{notes.map((n) => <li key={n}>{n}</li>)}</ul>
+      )}
       <p className="trials-note">
         Only the trial team can confirm eligibility. This is not medical advice: discuss trials with your doctor.
       </p>

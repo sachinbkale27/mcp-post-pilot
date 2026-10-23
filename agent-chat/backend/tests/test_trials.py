@@ -129,3 +129,37 @@ def test_the_supervisor_gets_the_markdown_report():
 
     message = ToolMessage(json.dumps({"result": "| Trial |", "trials": []}), tool_call_id="1", name="submit_trials")
     assert filed_report([message], "submit_trials") == "| Trial |"
+
+
+async def test_trials_that_exclude_the_person_are_left_out(monkeypatch):
+    async def fake_get(path="", params=None):
+        return {"totalCount": 1, "studies": [STUDY]} if not path else STUDY
+
+    async def fake_screen(person, card, record):
+        assert "osimertinib" in person and "anti-PD-1" in record
+        return trials.Screen(reason="needs prior anti-PD-1", person_fact="progressed on osimertinib", criterion="progressed on at least one prior anti-PD-1 therapy", excluded=True)
+
+    monkeypatch.setattr(trials, "registry_get", fake_get)
+    monkeypatch.setattr(trials, "screen", fake_screen)
+    spec = AgentSpec(name="trials", title="t", description="d", mcp_url="local:trials", prompt="p")
+    pick = {"nct_id": "NCT01234567", "why_matched": "m", "evidence": "Drug A in Melanoma"}
+    async with connect(spec) as mcp:
+        await mcp.call_tool("search_trials", {"condition": "melanoma"})
+        out = data(await mcp.call_tool("submit_trials", {"summary_text": "s", "trials": [pick], "person": "Progressed on osimertinib"}))
+        assert out["trials"] == [] and "Left out NCT01234567: its criteria say" in out["result"]
+
+        # a screen that cites a criterion the record doesn't have can't remove a trial
+        async def invented(person, card, record):
+            return trials.Screen(reason="x", person_fact="progressed on osimertinib", criterion="no prior osimertinib allowed", excluded=True)
+
+        monkeypatch.setattr(trials, "screen", invented)
+        out = data(await mcp.call_tool("submit_trials", {"summary_text": "s", "trials": [pick], "person": "Progressed on osimertinib"}))
+        assert [c["nct_id"] for c in out["trials"]] == ["NCT01234567"]
+
+        # nor can one that relies on a fact the user never gave
+        async def assumed(person, card, record):
+            return trials.Screen(reason="x", person_fact="had brain radiation", criterion="progressed on at least one prior anti-PD-1 therapy", excluded=True)
+
+        monkeypatch.setattr(trials, "screen", assumed)
+        out = data(await mcp.call_tool("submit_trials", {"summary_text": "s", "trials": [pick], "person": "Progressed on osimertinib"}))
+        assert [c["nct_id"] for c in out["trials"]] == ["NCT01234567"]

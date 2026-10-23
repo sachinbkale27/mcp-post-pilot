@@ -592,3 +592,5 @@ button { font: inherit; color: inherit; }
 .trial-source a { color: var(--accent); }
 .trials-note { margin: 0; color: var(--text-3); font-size: 12px; }
 .trial-evidence { display: block; margin-top: 4px; padding-left: 8px; border-left: 2px solid var(--line-2); color: var(--text-3); font-style: italic; }
+.trials-notes { margin: 0; padding: 8px 12px 8px 28px; border-radius: 10px; background: var(--bg-2); color: var(--text-2); font-size: 12.5px; }
+.trials-notes li + li { margin-top: 4px; }

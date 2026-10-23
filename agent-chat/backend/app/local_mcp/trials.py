@@ -8,13 +8,17 @@ also serves it over Streamable HTTP for the MCP Inspector.
   trial_locations  a trial's sites, nearest first
   submit_trials    files the trials to show the user. Only trials this session read from the registry are
                    accepted, each match must quote the trial's record, and the cards are built from registry
-                   data, so a report can't carry invented trial ids, statuses, sites or criteria
+                   data, so a report can't carry invented trial ids, statuses, sites or criteria. When the
+                   search is for a person, each trial's criteria are screened against what the user said about
+                   them (one focused model call per trial), and trials whose criteria exclude them are left out
 
 Each connection gets its own server (create_server), which remembers the trials it read.
 """
 
+import asyncio
 import math
 import os
+import re
 from typing import Annotated, Any, Literal
 
 import httpx
@@ -26,6 +30,7 @@ from pydantic import BaseModel, Field
 from .research import quote_found
 
 API = "https://clinicaltrials.gov/api/v2/studies"
+SCREEN_MODEL = os.getenv("TRIALS_SCREEN_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-2024-11-20"
 STUDY_URL = "https://clinicaltrials.gov/study/"
 USER_AGENT = "PostPilotTrials/1.0 (+https://agent.sachin-kale.com)"
 NCT_ID = r"^NCT\d{8}$"
@@ -67,6 +72,14 @@ class TrialPick(BaseModel):
         default_factory=list,
         description="Eligibility points only the trial team can confirm (key exclusions, prior treatment, biomarkers)",
     )
+
+
+class Screen(BaseModel):
+    # Reasoning first, then the verdict
+    reason: str = Field(description="One short sentence: which stated fact conflicts with which criterion, or what still needs checking")
+    person_fact: str = Field(description="The stated fact about the person that conflicts, copied from the person description; empty if none")
+    criterion: str = Field(description="The criterion it conflicts with, copied exactly; empty if none")
+    excluded: bool = Field(description="True only if the stated fact by itself violates the criterion, with no assumptions")
 
 
 class RegistryError(ToolError):
@@ -256,6 +269,33 @@ def details(study: dict) -> dict:
     }
 
 
+# ---------------------------------------------------------------- eligibility screen
+
+SCREEN_PROMPT = """You screen one clinical trial's eligibility criteria against what is known about one person.
+Decide whether any inclusion or exclusion criterion clearly rules them out, given ONLY the facts stated about
+them: for example a first-line or treatment-naive trial ("no prior EGFR TKI", "no prior systemic therapy for
+advanced disease") for someone who already had that treatment, an age or sex outside the limits, a required
+biomarker they don't have, or a stage the trial doesn't take. Facts that aren't stated are unknown, never a
+reason to exclude: if ruling them out needs any assumption (that they probably had radiation, have brain
+metastases, poor organ function, ...), excluded is false and reason says what to check. When excluded, copy
+the conflicting fact from the person description and the deciding criterion from the trial exactly."""
+
+
+async def screen(person: str, card: dict, record: str) -> Screen:
+    from openai import AsyncOpenAI
+
+    response = await AsyncOpenAI(timeout=40).chat.completions.parse(
+        model=SCREEN_MODEL,
+        temperature=0,
+        response_format=Screen,
+        messages=[
+            {"role": "system", "content": SCREEN_PROMPT},
+            {"role": "user", "content": f"Person: {person}\n\nTrial {card['nct_id']}: {card['title']}\n\n{record[:12000]}"},
+        ],
+    )
+    return response.choices[0].message.parsed
+
+
 # ---------------------------------------------------------------- report
 
 
@@ -385,6 +425,7 @@ def create_server() -> MCPServer:
     async def submit_trials(
         summary_text: str,
         trials: Annotated[list[TrialPick], Field(max_length=12)],
+        person: str = "",
         notes: list[str] | None = None,
     ) -> dict:
         """File the trials to show the user, best match first, and get the formatted report. Call it once.
@@ -398,6 +439,8 @@ def create_server() -> MCPServer:
         Args:
             summary_text: What was searched and found, in plain language.
             trials: The trials to show, each with why it matched and what the trial team must confirm.
+            person: Everything the user said about the person the search is for (diagnosis, stage, biomarkers,
+                prior treatments, age, sex), or "" when it isn't for a person (a landscape or a claim).
             notes: Search tips or caveats, e.g. "No trials within 100 km; 3 more within 500 km".
         """
         problems: dict[int, str] = {}  # pick index -> why it was not accepted
@@ -419,10 +462,36 @@ def create_server() -> MCPServer:
             if i not in problems
         ]
         all_notes = list(notes or [])
+        if person.strip() and cards:
+            cards = await screen_cards(person.strip(), cards, all_notes)
         if problems:
             left_out = ", ".join(dict.fromkeys(trials[i].nct_id for i in problems))
             all_notes.append(f"Left out {left_out}: the match could not be confirmed from the registry record.")
-        return {"result": format_report(summary_text, cards, all_notes), "trials": cards}
+        return {"result": format_report(summary_text, cards, all_notes), "trials": cards, "notes": all_notes}
+
+    def stated(fact: str, person: str) -> bool:
+        words = re.findall(r"[a-z0-9]+", fact.lower())
+        return bool(words) and " ".join(words) in " ".join(re.findall(r"[a-z0-9]+", person.lower()))
+
+    async def screen_cards(person: str, cards: list[dict], notes: list[str]) -> list[dict]:
+        """Leave out trials whose criteria rule the person out (the deciding criterion must be in the record)."""
+        results = await asyncio.gather(
+            *(screen(person, card, texts[card["nct_id"]]) for card in cards), return_exceptions=True
+        )
+        kept = []
+        for card, result in zip(cards, results):
+            if isinstance(result, BaseException):
+                notes.append(f"{card['nct_id']}: the automatic eligibility screen failed; check its criteria in full.")
+                kept.append(card)
+            elif (
+                result.excluded
+                and quote_found(result.criterion, texts[card["nct_id"]])
+                and stated(result.person_fact, person)
+            ):
+                notes.append(f"Left out {card['nct_id']}: its criteria say \u201c{result.criterion.strip()}\u201d ({result.reason})")
+            else:
+                kept.append(card)
+        return kept
 
     return mcp
 

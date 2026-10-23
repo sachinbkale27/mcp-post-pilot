@@ -178,11 +178,11 @@ export function summarizeResult(output: unknown): string | undefined {
   return undefined;
 }
 
-/** The trials an agent filed with submit_trials (its last accepted call), for the trial cards. */
-export function filedTrials(tools: { name: string; output?: unknown; isError?: boolean }[]): Trial[] | undefined {
+/** What an agent filed with submit_trials (its last accepted call), for the trial cards. */
+export function filedTrials(tools: { name: string; output?: unknown; isError?: boolean }[]): { trials: Trial[]; notes: string[] } | undefined {
   const filed = [...tools].reverse().find((t) => t.name === "submit_trials" && !t.isError && t.output);
-  const trials = filed && typeof filed.output === "object" ? (filed.output as { trials?: Trial[] }).trials : undefined;
-  return Array.isArray(trials) ? trials : undefined;
+  const out = filed && typeof filed.output === "object" ? (filed.output as { trials?: Trial[]; notes?: string[] }) : undefined;
+  return out && Array.isArray(out.trials) ? { trials: out.trials, notes: Array.isArray(out.notes) ? out.notes : [] } : undefined;
 }
 
 export function formatDuration(ms: number): string {
