@@ -152,6 +152,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
         model: areas?.model ?? model,
         instructions: areas?.instructions ?? instructions.trim(),
         labels: areas?.labels ?? labels.split(",").map((l) => l.trim()).filter(Boolean),
+        image_id: labelImageId, // add to the same Image Label image as earlier runs (e.g. its nuclei)
       };
       for await (const event of streamLabel(request, controller.signal)) {
         if (event.type === "label_result") {
@@ -176,6 +177,8 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     setUpload(undefined);
     setRun(undefined);
     setDiagnosis(undefined);
+    setLabelImageId(undefined);
+    setOriginal(undefined);
   }
 
   /** Run one histology tool on the image: nuclei outlines, a quality check, or a stain-normalized copy. */

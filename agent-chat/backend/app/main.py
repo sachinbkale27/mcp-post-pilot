@@ -64,6 +64,7 @@ class LabelRequest(BaseModel):
     category: str = Field(default="agent-chat", max_length=60)
     grid_step: int | None = Field(default=None, ge=10, le=1000)  # the model's copy has a pixel grid this far apart
     model: Literal["sam", "medsam"] = "sam"  # Segment Anything, or MedSAM for medical images
+    image_id: str | None = Field(default=None, pattern=r"^[0-9a-f-]{36}$")  # add to this Image Label image
 
     @field_validator("labels")
     @classmethod
@@ -171,6 +172,7 @@ async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
             req.category.strip() or "agent-chat",
             req.grid_step,
             req.model,
+            req.image_id,
         ):
             yield _sse(event)
     except LabelingUnavailable as exc:

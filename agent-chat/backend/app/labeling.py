@@ -22,7 +22,8 @@ from .specialists.runner import call_mcp_tool, connect, run_specialist
 LABEL_AGENT = "labels"
 
 TASK = """Annotate Image Label image {image_id} ({width} x {height} pixels). It is already uploaded and is the
-image attached here: do not upload it again.
+image attached here: do not upload it again. It may already have annotations (for example nuclei from
+detect_nuclei): keep them, and only add new ones.
 
 What to label: {instructions}
 {labels}{grid}
@@ -89,8 +90,10 @@ async def run_labeling(
     category: str,
     grid_step: int | None = None,
     model: str = "sam",
+    image_id: str | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
-    """Yield UI events while the image is uploaded, annotated and exported."""
+    """Yield UI events while the image is uploaded, annotated and exported. With image_id (an image already
+    in Image Label, e.g. from an earlier run or a histology tool), the new annotations are added to it."""
     spec = labeling_agent()
     queue: asyncio.Queue = asyncio.Queue()
     delegation = f"label-{uuid.uuid4()}"
@@ -116,17 +119,20 @@ async def run_labeling(
             # Start loading the segmentation model now; it's needed after the upload and the agent's look
             warming = asyncio.create_task(warm_up(model))
             async with connect(spec) as mcp:
-                uploaded = await tool(
-                    mcp, "upload_image_from_url", {"url": url, "name": image.get("name") or "image", "category": category}
-                )
+                if image_id:
+                    uploaded = await tool(mcp, "get_image", {"image_id": image_id})
+                else:
+                    uploaded = await tool(
+                        mcp, "upload_image_from_url", {"url": url, "name": image.get("name") or "image", "category": category}
+                    )
             await warming
-            image_id = uploaded["imageId"]
+            target = uploaded["imageId"]
             label_line = f"Use exactly these label names: {', '.join(labels)}.\n" if labels else ""
             report = await run_specialist(
                 spec,
                 model=_model(disable_streaming=True),
                 task=TASK.format(
-                    image_id=image_id,
+                    image_id=target,
                     width=uploaded.get("width"),
                     height=uploaded.get("height"),
                     instructions=instructions,
@@ -141,14 +147,14 @@ async def run_labeling(
                 emit=emit,
             )
             async with connect(spec) as mcp:
-                saved = await tool(mcp, "get_image", {"image_id": image_id})
+                saved = await tool(mcp, "get_image", {"image_id": target})
                 coco, yolo, qupath = await asyncio.gather(
-                    *(tool(mcp, "export_annotations", {"image_id": image_id, "format": f}) for f in ("coco", "yolo", "qupath"))
+                    *(tool(mcp, "export_annotations", {"image_id": target, "format": f}) for f in ("coco", "yolo", "qupath"))
                 )
             emit(
                 {
                     "type": "label_result",
-                    "image_id": image_id,
+                    "image_id": target,
                     "width": saved.get("width"),
                     "height": saved.get("height"),
                     "annotations": saved.get("annotations") or [],

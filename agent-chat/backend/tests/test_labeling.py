@@ -131,3 +131,11 @@ async def test_pathology_tools_upload_once_and_return_results(label_server):
     events = [e async for e in pathology.run_pathology(IMAGE, "normalize", image_id="0" * 36)]
     normalized = next(e for e in events if e["type"] == "normalized")
     assert normalized == {"type": "normalized", "image_id": "img-9", "name": "abc-normalized.jpg", "url": "https://s3.example/n.jpg"}
+
+
+async def test_annotating_an_image_already_in_image_label_adds_to_it(label_server):
+    events = [e async for e in labeling.run_labeling(IMAGE, "Outline the gland", [], "pets", None, "medsam", image_id="img-1")]
+    assert "upload_image_from_url" not in [c[0] for c in label_server]
+    task = next(t for name, t in label_server if name == "agent")
+    assert "keep them, and only add new ones" in task
+    assert next(e for e in events if e["type"] == "label_result")["image_id"] == "img-1"
