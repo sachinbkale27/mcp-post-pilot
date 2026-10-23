@@ -60,6 +60,29 @@ export type AgentEvent =
   | { type: "error"; message: string }
   | { type: "done" };
 
+/** A trial the Clinical Trials agent filed (submit_trials): registry facts plus why it matched. */
+export interface Trial {
+  nct_id: string;
+  title: string;
+  status: string;
+  phases: string[];
+  conditions: string[];
+  interventions: string[];
+  enrollment?: number | null;
+  sponsor: string;
+  sponsor_type: string;
+  ages: string;
+  sex: string;
+  last_update: string;
+  why_stopped: string;
+  has_results: boolean;
+  site_count: number;
+  nearest_site: { facility: string; city: string; country: string; status: string; distance_km?: number } | null;
+  url: string;
+  why_matched: string;
+  to_confirm: string[];
+}
+
 /** A problematic area found by Diagnose, outlined on the image by the Image Annotation Agent. */
 export interface DiagnosisRegion {
   label: string;

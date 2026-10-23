@@ -561,3 +561,33 @@ button { font: inherit; color: inherit; }
   .label-view { padding: 20px 16px 36px; }
   .label-panel { padding: 14px; }
 }
+
+/* ---- clinical trials ---- */
+.capabilities-intro { margin: -4px 0 12px !important; max-width: none !important; color: var(--text-3) !important; font-size: 13.5px !important; }
+.capability-example { font-style: italic; color: var(--text-2) !important; }
+.diagnosis-trials { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 4px; }
+.diagnosis-trials span { flex: 1 1 260px; color: var(--text-3); font-size: 12.5px; }
+.trials { display: grid; gap: 10px; padding: 4px 12px 12px; }
+.trial { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); min-width: 0; }
+.trial-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.trial-badge {
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--text-2);
+  font-size: 11.5px; font-weight: 600; cursor: help; white-space: nowrap;
+}
+.trial-badge.status-open { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.trial-badge.status-soon { color: #d97706; border-color: color-mix(in srgb, #d97706 45%, transparent); background: color-mix(in srgb, #d97706 10%, transparent); }
+.trial-badge.status-closed { color: var(--text-3); }
+.trial-id { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--accent); font-size: 12.5px; text-decoration: none; }
+.trial-id:hover { text-decoration: underline; }
+.trial-title { margin: 0; font: 600 14.5px/1.35 var(--font-display); color: var(--text); overflow-wrap: anywhere; }
+.trial-facts { display: flex; gap: 6px; align-items: baseline; margin: 0; color: var(--text-2); font-size: 13px; overflow-wrap: anywhere; }
+.trial-facts svg { flex: none; position: relative; top: 2px; color: var(--text-3); }
+.trial-why, .trial-confirm { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text-2); }
+.trial-why svg { flex: none; margin-top: 2px; color: var(--ok); }
+.trial-confirm svg { flex: none; margin-top: 2px; color: #d97706; }
+.trial-why strong, .trial-confirm strong { color: var(--text); margin-right: 4px; }
+.trial-confirm ul { margin: 2px 0 0; padding-left: 18px; }
+.trial-stopped { margin: 0; color: var(--danger); font-size: 12.5px; }
+.trial-source { color: var(--text-3); font-size: 12px; }
+.trial-source a { color: var(--accent); }
+.trials-note { margin: 0; color: var(--text-3); font-size: 12px; }

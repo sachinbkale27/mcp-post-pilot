@@ -1,6 +1,7 @@
 /** How agent tool calls are presented: kind, icon and plain-language labels. */
+import type { Trial } from "../api";
 import {
-  BookOpen, ChartColumn, Dna, Eraser, FileDown, FilePen, FilePlus2, FileSearch, FileText, Globe, ImageUp, Images, Library, Link2, List,
+  BookOpen, ChartColumn, ClipboardList, FlaskConical, MapPin, Dna, Eraser, FileDown, FilePen, FilePlus2, FileSearch, FileText, Globe, ImageUp, Images, Library, Link2, List,
   type LucideIcon, Microscope, PenTool, Replace, ScanSearch, SearchCheck, Send, Tags, Trash2, Undo2, WandSparkles, Wrench,
 } from "lucide-react";
 
@@ -24,6 +25,10 @@ const site = (v: unknown) => {
   }
 };
 const count = (v: unknown, noun: string) => (Array.isArray(v) ? `${v.length} ${noun}${v.length === 1 ? "" : "s"}` : `${noun}s`);
+const where = (a: Args) => {
+  const near = a.near as { place?: string } | undefined;
+  return near?.place ? ` near ${near.place}` : a.country ? ` in ${a.country}` : "";
+};
 const quoted = (v: unknown) => (typeof v === "string" && v ? `“${v.length > 48 ? v.slice(0, 47) + "…" : v}”` : "");
 
 const TOOLS: Record<string, ToolMeta> = {
@@ -103,6 +108,23 @@ const TOOLS: Record<string, ToolMeta> = {
     running: (a) => `Exporting ${String(a.format ?? "coco").toUpperCase()}`,
     done: (a) => `Exported ${String(a.format ?? "coco").toUpperCase()}`,
   },
+  // trials MCP server (Clinical Trials agent)
+  search_trials: {
+    kind: "read", icon: FlaskConical,
+    running: (a) => `Searching trials for ${quoted(a.condition)}${where(a)}`,
+    done: (a) => `Searched trials for ${quoted(a.condition)}${where(a)}`,
+  },
+  get_trial: { kind: "read", icon: BookOpen, running: (a) => `Reading ${a.nct_id}`, done: (a) => `Read ${a.nct_id}` },
+  trial_locations: {
+    kind: "read", icon: MapPin,
+    running: (a) => `Finding sites of ${a.nct_id}`,
+    done: (a) => `Found sites of ${a.nct_id}`,
+  },
+  submit_trials: {
+    kind: "read", icon: ClipboardList,
+    running: (a) => `Filing ${count(a.trials, "trial")}`,
+    done: (a) => `Filed ${count(a.trials, "trial")}`,
+  },
   // research MCP server (fact-check agent)
   web_search: {
     kind: "read", icon: SearchCheck,
@@ -139,6 +161,10 @@ export function toolMeta(name: string): ToolMeta {
 
 /** A short summary of a tool result for the collapsed card, e.g. "3 posts". */
 export function summarizeResult(output: unknown): string | undefined {
+  if (output && typeof output === "object" && Array.isArray((output as { trials?: unknown }).trials)) {
+    const o = output as { total?: number; trials: unknown[] };
+    return typeof o.total === "number" ? `${o.total} matching` : `${o.trials.length} trial${o.trials.length === 1 ? "" : "s"}`;
+  }
   const value = output && typeof output === "object" && "result" in output ? (output as { result: unknown }).result : output;
   if (Array.isArray(value)) return `${value.length} ${value.length === 1 ? "result" : "results"}`;
   if (value && typeof value === "object") {
@@ -150,6 +176,13 @@ export function summarizeResult(output: unknown): string | undefined {
   }
   if (typeof value === "string") return value.length > 60 ? value.slice(0, 59) + "…" : value;
   return undefined;
+}
+
+/** The trials an agent filed with submit_trials (its last accepted call), for the trial cards. */
+export function filedTrials(tools: { name: string; output?: unknown; isError?: boolean }[]): Trial[] | undefined {
+  const filed = [...tools].reverse().find((t) => t.name === "submit_trials" && !t.isError && t.output);
+  const trials = filed && typeof filed.output === "object" ? (filed.output as { trials?: Trial[] }).trials : undefined;
+  return Array.isArray(trials) ? trials : undefined;
 }
 
 export function formatDuration(ms: number): string {

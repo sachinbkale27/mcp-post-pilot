@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CircleAlert, Download, Eye, EyeOff, ImagePlus, Link2, LoaderCircle, RotateCcw, ScanSearch, Square, Stethoscope, Tag } from "lucide-react";
+import { CircleAlert, Download, Eye, EyeOff, FlaskConical, ImagePlus, Link2, LoaderCircle, RotateCcw, ScanSearch, Square, Stethoscope, Tag } from "lucide-react";
 import {
   fetchImageFromUrl, streamDiagnosis, streamLabel, uploadImage, warmUpLabeling,
   type AgentEvent, type Annotation, type DiagnosisRegion, type LabelResult,
@@ -47,13 +47,14 @@ type Model = "sam" | "medsam";
 interface Props {
   active: boolean;      // the view is showing
   available: boolean;   // the Image Annotation Agent is configured and online
+  onFindTrials?: (diagnosis: string) => void; // when the Clinical Trials agent is configured
   unavailableReason?: string;
   busy: boolean;
   onBusyChange: (busy: boolean) => void;
 }
 
 /** Upload an image, say what to label, and watch the Image Annotation Agent annotate it. */
-export function LabelView({ active, available, unavailableReason, busy, onBusyChange }: Props) {
+export function LabelView({ active, available, unavailableReason, busy, onBusyChange, onFindTrials }: Props) {
   const [upload, setUpload] = useState<Upload>();
   const [instructions, setInstructions] = useState("");
   const [labels, setLabels] = useState("");
@@ -372,6 +373,17 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
                   Outlined as <strong>Suspected {diagnosis.suspected.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())} (AI)</strong>: the AI's leading interpretation,
                   not a diagnosis. It needs confirmation by a pathologist.
                 </p>
+              )}
+              {diagnosis.suspected && onFindTrials && (
+                <div className="diagnosis-trials">
+                  <button className="label-secondary" onClick={() => onFindTrials(diagnosis.suspected!)}>
+                    <FlaskConical size={15} aria-hidden /> Find clinical trials
+                  </button>
+                  <span>
+                    Opens Agent Chat with the question ready: add your city (and age, if you like), then send.
+                    It lists registry trials for {diagnosis.suspected}; it doesn't confirm the diagnosis.
+                  </span>
+                </div>
               )}
               <ul>
                 {diagnosis.regions.map((r) => (

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Dna, ImagePlus, ListChecks, Menu, Microscope, SearchCheck, Sparkles, WandSparkles } from "lucide-react";
+import { Dna, FlaskConical, ImagePlus, ListChecks, MapPin, Menu, Microscope, SearchCheck, Sparkles, Target, WandSparkles } from "lucide-react";
 import { BLOG_URL, getAgents, resetChat, streamChat, uploadImage, type AgentsInfo } from "./api";
 import { Composer, MAX_ATTACHMENTS, type Attachment } from "./components/Composer";
 import { prepareImage } from "./lib/images";
@@ -35,6 +35,28 @@ const IMAGE_CAPABILITIES = [
   },
 ];
 
+/** Example questions for the Clinical Trials agent; each shows one kind of search. */
+const TRIAL_EXAMPLES = [
+  {
+    icon: MapPin,
+    title: "Trials near you",
+    body: "Name the condition and a city: it searches recruiting trials within a radius and shows the nearest site.",
+    example: "Find recruiting clinical trials for HER2-low breast cancer within 300 km of Pune.",
+  },
+  {
+    icon: Target,
+    title: "Match a patient profile",
+    body: "Add age, sex, a biomarker or prior treatments: it reads each trial's criteria and lists what the trial team must confirm.",
+    example: "Phase 2 or 3 trials for BRAF V600E metastatic melanoma that progressed on immunotherapy, for a 68-year-old man, in India.",
+  },
+  {
+    icon: FlaskConical,
+    title: "What's being tested",
+    body: "Ask about a condition or drug class: it summarises trials by intervention, phase and sponsor, or checks a claim about a trial.",
+    example: "What treatments are being tested in clinical trials for diabetic foot ulcers, and in which phases?",
+  },
+];
+
 /** #annotate (or the earlier #label) opens the annotation view. */
 function viewFromHash(): View {
   return location.hash === "#annotate" || location.hash === "#label" ? "label" : "chat";
@@ -54,6 +76,7 @@ export function App() {
   const busy = turns.some((t) => t.pending);
   const [view, setView] = useState<View>(viewFromHash);
   const [labeling, setLabeling] = useState(false);
+  const [focusComposer, setFocusComposer] = useState(0);
   const labelsAgent = info?.agents.find((a) => a.name === "labels");
 
   // #annotate opens the annotation view, so it can be linked to and survives a reload
@@ -133,6 +156,13 @@ export function App() {
     }
   }
 
+  /** Put a question in the chat box for the user to finish (e.g. add their city) and send. */
+  function draft(text: string) {
+    openView("chat");
+    setInput(text);
+    setFocusComposer((n) => n + 1);
+  }
+
   async function newChat() {
     if (conversationId) await resetChat(conversationId).catch(() => {});
     setConversationId(undefined);
@@ -181,6 +211,11 @@ export function App() {
             }
             busy={labeling}
             onBusyChange={setLabeling}
+            onFindTrials={
+              info?.agents.some((a) => a.name === "trials")
+                ? (dx) => draft(`Find recruiting clinical trials for ${dx} near `)
+                : undefined
+            }
           />
         </div>
 
@@ -212,7 +247,10 @@ export function App() {
                   </>
                 ) : null}
                 {info?.agents.some((a) => a.name === "factcheck")
-                  ? ", and the Fact-check agent verifies claims and links against web sources"
+                  ? ", the Fact-check agent verifies claims and links against web sources"
+                  : null}
+                {info?.agents.some((a) => a.name === "trials")
+                  ? ", and the Clinical Trials agent finds trials in the ClinicalTrials.gov registry"
                   : null}
                 .
                 I hand each part of your request to the right agent, combine their results, and you see
@@ -227,6 +265,32 @@ export function App() {
                   </button>
                 ))}
               </div>
+
+              {info?.agents.some((a) => a.name === "trials") && (
+                <section className="capabilities" aria-labelledby="trials-heading">
+                  <h3 id="trials-heading"><FlaskConical size={16} aria-hidden /> Clinical trials</h3>
+                  <p className="capabilities-intro">
+                    Searches the public ClinicalTrials.gov registry. The more you say (condition, place, age,
+                    biomarker, prior treatment), the better the matches. It explains each trial; only the trial
+                    team can confirm eligibility.
+                  </p>
+                  <div className="capability-grid">
+                    {TRIAL_EXAMPLES.map(({ icon: Icon, title, body, example }) => (
+                      <div key={title} className="capability">
+                        <span className="capability-icon"><Icon size={18} aria-hidden /></span>
+                        <div>
+                          <strong>{title}</strong>
+                          <p>{body}</p>
+                          <p className="capability-example">“{example}”</p>
+                          <button className="capability-try" onClick={() => draft(example)} disabled={busy}>
+                            Try it →
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               <section className="capabilities" aria-labelledby="images-heading">
                 <h3 id="images-heading"><ImagePlus size={16} aria-hidden /> Posts with images</h3>
@@ -260,6 +324,7 @@ export function App() {
 
         {view === "chat" && <Composer
           value={input}
+          focusSignal={focusComposer}
           busy={busy}
           attachments={attachments}
           onAddFiles={addFiles}

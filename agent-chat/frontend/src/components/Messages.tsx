@@ -2,7 +2,8 @@ import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Bot, Check, ChevronRight, CircleAlert, Copy, LoaderCircle, OctagonX } from "lucide-react";
-import { formatDuration, resultImage, summarizeResult, toolMeta } from "../lib/tools";
+import { filedTrials, formatDuration, resultImage, summarizeResult, toolMeta } from "../lib/tools";
+import { TrialCards } from "./TrialCards";
 
 export type ToolStep = {
   type: "tool";
@@ -110,6 +111,7 @@ function ToolCard({ step }: { step: ToolStep }) {
 export function AgentCard({ step }: { step: AgentStep }) {
   const [showTask, setShowTask] = useState(false);
   const running = step.finishedAt === undefined;
+  const trials = filedTrials(step.tools);
   return (
     <div className={`agent-card agent-${step.agent}${step.isError ? " is-error" : ""}`}>
       <button className="agent-head" onClick={() => setShowTask(!showTask)} aria-expanded={showTask}>
@@ -139,6 +141,7 @@ export function AgentCard({ step }: { step: AgentStep }) {
           {step.tools.map((tool) => <ToolCard key={tool.id} step={tool} />)}
         </div>
       )}
+      {trials && <TrialCards trials={trials} />}
     </div>
   );
 }

@@ -15,6 +15,7 @@ export interface Attachment {
 
 interface Props {
   value: string;
+  focusSignal?: number; // changes when the app puts a question in the box for the user to finish
   busy: boolean;
   attachments: Attachment[];
   onChange: (value: string) => void;
@@ -24,7 +25,7 @@ interface Props {
   onStop: () => void;
 }
 
-export function Composer({ value, busy, attachments, onChange, onAddFiles, onRemoveAttachment, onSend, onStop }: Props) {
+export function Composer({ value, focusSignal, busy, attachments, onChange, onAddFiles, onRemoveAttachment, onSend, onStop }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -40,6 +41,12 @@ export function Composer({ value, busy, attachments, onChange, onAddFiles, onRem
   }, [value]);
 
   useEffect(() => { if (!busy) ref.current?.focus(); }, [busy]);
+
+  // Focus with the cursor at the end, ready to type the rest
+  useEffect(() => {
+    const el = ref.current;
+    if (el && focusSignal) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  }, [focusSignal]);
 
   function submit(e: FormEvent) {
     e.preventDefault();
