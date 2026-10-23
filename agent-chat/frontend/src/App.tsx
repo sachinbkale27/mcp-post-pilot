@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Dna, ImagePlus, ListChecks, Menu, Microscope, SearchCheck, Sparkles, WandSparkles } from "lucide-react";
-import { BLOG_URL, getAgents, resetChat, streamChat, uploadImage, type AgentEvent, type AgentsInfo } from "./api";
+import { BLOG_URL, getAgents, resetChat, streamChat, uploadImage, type AgentsInfo } from "./api";
 import { Composer, MAX_ATTACHMENTS, type Attachment } from "./components/Composer";
 import { prepareImage } from "./lib/images";
-import { AgentTurn, UserMessage, type AgentStep, type Step, type Turn } from "./components/Messages";
-import { Brand, Sidebar } from "./components/Sidebar";
+import { AgentTurn, UserMessage, type Turn } from "./components/Messages";
+import { applyEvent } from "./lib/events";
+import { LabelView } from "./components/LabelView";
+import { Brand, Sidebar, type View } from "./components/Sidebar";
 
 const SUGGESTIONS = [
   { icon: ListChecks, title: "Catch me up", prompt: "What posts are on the blog, and what is each one about?" },
@@ -33,45 +35,6 @@ const IMAGE_CAPABILITIES = [
   },
 ];
 
-/** Apply a change to the delegation (agent step) with this id. */
-function updateAgent(steps: Step[], id: string, fn: (s: AgentStep) => AgentStep): Step[] {
-  return steps.map((s) => (s.type === "agent" && s.id === id ? fn(s) : s));
-}
-
-/** Apply one streamed event to the steps of the current turn. */
-function applyEvent(steps: Step[], event: AgentEvent): Step[] {
-  const last = steps[steps.length - 1];
-  switch (event.type) {
-    case "token":
-      return last?.type === "text"
-        ? [...steps.slice(0, -1), { type: "text", text: last.text + event.text }]
-        : [...steps, { type: "text", text: event.text }];
-    case "agent_start":
-      return [
-        ...steps,
-        { type: "agent", id: event.id, agent: event.agent, title: event.title, task: event.task, tools: [], startedAt: performance.now() },
-      ];
-    case "agent_end":
-      return updateAgent(steps, event.id, (s) => ({ ...s, isError: event.is_error, finishedAt: performance.now() }));
-    case "tool_call":
-      return updateAgent(steps, event.delegation, (s) => ({
-        ...s,
-        tools: [...s.tools, { type: "tool", id: event.id, name: event.name, input: event.input, startedAt: performance.now() }],
-      }));
-    case "tool_result":
-      return updateAgent(steps, event.delegation, (s) => ({
-        ...s,
-        tools: s.tools.map((t) =>
-          t.id === event.id ? { ...t, output: event.output, isError: event.is_error, finishedAt: performance.now() } : t,
-        ),
-      }));
-    case "error":
-      return [...steps, { type: "error", message: event.message }];
-    default:
-      return steps;
-  }
-}
-
 export function App() {
   const [info, setInfo] = useState<AgentsInfo>();
   const [infoError, setInfoError] = useState<string>();
@@ -84,6 +47,21 @@ export function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const busy = turns.some((t) => t.pending);
+  const [view, setView] = useState<View>(() => (location.hash === "#label" ? "label" : "chat"));
+  const [labeling, setLabeling] = useState(false);
+  const labelsAgent = info?.agents.find((a) => a.name === "labels");
+
+  // #label opens the labeling view, so it can be linked to and survives a reload
+  useEffect(() => {
+    const onHash = () => setView(location.hash === "#label" ? "label" : "chat");
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  function openView(next: View) {
+    setView(next);
+    setSidebarOpen(false);
+    history.replaceState(null, "", next === "label" ? "#label" : location.pathname + location.search);
+  }
 
   const loadInfo = () => {
     setInfoError(undefined);
@@ -93,8 +71,9 @@ export function App() {
 
   useEffect(() => {
     const first = turns[0] && (turns[0].user || "Images");
-    document.title = first ? `${first.slice(0, 40)} · Post Pilot Agent` : "Post Pilot Agent";
-  }, [turns]);
+    const title = view === "label" ? "Label images" : first && first.slice(0, 40);
+    document.title = title ? `${title} · Post Pilot Agent` : "Post Pilot Agent";
+  }, [turns, view]);
 
   // Follow new output only while the reader is at the bottom.
   useEffect(() => {
@@ -164,7 +143,10 @@ export function App() {
         infoError={infoError}
         busy={busy}
         open={sidebarOpen}
-        onNewChat={newChat}
+        view={view}
+        labelingAvailable={!!labelsAgent}
+        onViewChange={openView}
+        onNewChat={() => { newChat(); openView("chat"); }}
         onRetry={loadInfo}
         onClose={() => setSidebarOpen(false)}
       />
@@ -176,12 +158,29 @@ export function App() {
             <Menu size={19} />
           </button>
           <div className="only-mobile"><Brand /></div>
-          <h1 className="topbar-title hide-mobile">{turns[0] ? turns[0].user || "Images" : "New conversation"}</h1>
+          <h1 className="topbar-title hide-mobile">
+            {view === "label" ? "Label images" : turns[0] ? turns[0].user || "Images" : "New conversation"}
+          </h1>
           {info && <span className="model-chip"><Sparkles size={13} aria-hidden /> {info.model}</span>}
         </header>
 
+        {/* Both views stay mounted, so switching doesn't lose a conversation or a labeling run */}
+        <div className="scroll" hidden={view !== "label"}>
+          <LabelView
+            available={!info || !!labelsAgent?.online}
+            unavailableReason={
+              !labelsAgent
+                ? "The Labeling agent isn't configured on this server."
+                : `The Labeling agent is offline${labelsAgent.error ? `: ${labelsAgent.error}` : "."}`
+            }
+            busy={labeling}
+            onBusyChange={setLabeling}
+          />
+        </div>
+
         <div
           className="scroll"
+          hidden={view !== "chat"}
           ref={scrollRef}
           onScroll={(e) => {
             const el = e.currentTarget;
@@ -202,7 +201,8 @@ export function App() {
                   <>
                     , and the Labeling agent annotates your images in{" "}
                     <a href="https://labels.sachin-kale.com" target="_blank" rel="noreferrer">Image Label</a> and exports
-                    COCO or YOLO training data
+                    COCO or YOLO training data (try{" "}
+                    <a href="#label" onClick={(e) => { e.preventDefault(); openView("label"); }}>Label images</a>)
                   </>
                 ) : null}
                 {info?.agents.some((a) => a.name === "factcheck")
@@ -252,7 +252,7 @@ export function App() {
           )}
         </div>
 
-        <Composer
+        {view === "chat" && <Composer
           value={input}
           busy={busy}
           attachments={attachments}
@@ -261,7 +261,7 @@ export function App() {
           onChange={setInput}
           onSend={() => send(input)}
           onStop={() => abortRef.current?.abort()}
-        />
+        />}
       </main>
     </div>
   );

@@ -1,12 +1,17 @@
-import { BookText, Bot, FileCode2, MessageSquarePlus, Network, PanelLeftClose, SquareArrowOutUpRight } from "lucide-react";
+import { BookText, Bot, FileCode2, MessageSquarePlus, MessagesSquare, Network, PanelLeftClose, ScanSearch, SquareArrowOutUpRight } from "lucide-react";
 import { BLOG_URL, type AgentInfo, type AgentsInfo } from "../api";
 import { toolMeta } from "../lib/tools";
+
+export type View = "chat" | "label";
 
 interface Props {
   info?: AgentsInfo;
   infoError?: string;
   busy: boolean;
   open: boolean;
+  view: View;
+  labelingAvailable: boolean;
+  onViewChange: (view: View) => void;
   onNewChat: () => void;
   onRetry: () => void;
   onClose: () => void;
@@ -78,7 +83,7 @@ function AgentPanel({ agent, defaultOpen }: { agent: AgentInfo; defaultOpen: boo
   );
 }
 
-export function Sidebar({ info, infoError, busy, open, onNewChat, onRetry, onClose }: Props) {
+export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, onViewChange, onNewChat, onRetry, onClose }: Props) {
   const online = info?.agents.filter((a) => a.online).length ?? 0;
   const status = infoError ? "offline" : info ? (online === info.agents.length ? "online" : "partial") : "connecting";
 
@@ -94,6 +99,17 @@ export function Sidebar({ info, infoError, busy, open, onNewChat, onRetry, onClo
       <button className="new-chat" onClick={onNewChat} disabled={busy}>
         <MessageSquarePlus size={17} aria-hidden /> New conversation
       </button>
+
+      <nav className="view-nav" aria-label="Views">
+        <button className={view === "chat" ? "active" : undefined} onClick={() => onViewChange("chat")} aria-current={view === "chat" ? "page" : undefined}>
+          <MessagesSquare size={16} aria-hidden /> Chat
+        </button>
+        {labelingAvailable && (
+          <button className={view === "label" ? "active" : undefined} onClick={() => onViewChange("label")} aria-current={view === "label" ? "page" : undefined}>
+            <ScanSearch size={16} aria-hidden /> Label images
+          </button>
+        )}
+      </nav>
 
       <section className="panel">
         <div className="panel-head">

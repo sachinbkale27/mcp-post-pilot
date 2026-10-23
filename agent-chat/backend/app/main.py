@@ -11,6 +11,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel, Field, field_validator
 
 from .agent import list_agents, reset_thread, run_turn
+from .labeling import LabelingUnavailable, run_labeling
 from .origin import OriginSecretMiddleware
 
 app = FastAPI(title="MCP Agent Chat")
@@ -47,6 +48,21 @@ class ChatRequest(BaseModel):
     images: list[ChatImage] = Field(default_factory=list, max_length=4)
 
 
+class LabelRequest(BaseModel):
+    image: ChatImage
+    instructions: str = Field(min_length=3, max_length=2000)
+    labels: list[str] = Field(default_factory=list, max_length=20)
+    category: str = Field(default="agent-chat", max_length=60)
+
+    @field_validator("labels")
+    @classmethod
+    def _clean_labels(cls, value: list[str]) -> list[str]:
+        labels = list(dict.fromkeys(label.strip() for label in value if label.strip()))
+        if any(len(label) > 40 for label in labels):
+            raise ValueError("labels must be at most 40 characters")
+        return labels
+
+
 @app.get("/agents")
 async def agents():
     """Every specialist agent and what its MCP server offers; an offline server is reported, not raised."""
@@ -73,6 +89,20 @@ async def chat(req: ChatRequest) -> AsyncIterable[ServerSentEvent]:
         images = [img.model_dump() for img in req.images]
         async for event in run_turn(conversation_id, req.message, images):
             yield _sse(event)
+    except Exception as exc:
+        yield _sse({"type": "error", "message": _error_message(exc)})
+    yield _sse({"type": "done"})
+
+
+@app.post("/label", response_class=EventSourceResponse)
+async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
+    """Upload one image to Image Label, have the Labeling agent annotate it, and stream the progress and
+    a final label_result event (saved annotations and COCO / YOLO exports)."""
+    try:
+        async for event in run_labeling(req.image.model_dump(), req.instructions, req.labels, req.category.strip() or "agent-chat"):
+            yield _sse(event)
+    except LabelingUnavailable as exc:
+        yield _sse({"type": "error", "message": str(exc)})
     except Exception as exc:
         yield _sse({"type": "error", "message": _error_message(exc)})
     yield _sse({"type": "done"})

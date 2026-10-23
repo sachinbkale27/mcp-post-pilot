@@ -31,8 +31,35 @@ export type AgentEvent =
   | { type: "agent_end"; id: string; agent: string; is_error: boolean }
   | { type: "tool_call"; id: string; name: string; input: Record<string, unknown>; agent: string; delegation: string }
   | { type: "tool_result"; id: string; name: string; output: unknown; is_error: boolean; agent: string; delegation: string }
+  | ({ type: "label_result" } & LabelResult)
   | { type: "error"; message: string }
   | { type: "done" };
+
+/** One annotation as Image Label stores it (image pixels, origin top-left). */
+export interface Annotation {
+  id: string;
+  type: "polygon" | "circle" | "rectangle" | "pin" | "arrow";
+  label: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  radius?: number;
+  points?: { x: number; y: number }[];
+  arrowTarget?: { x: number; y: number };
+  confidence?: "high" | "medium" | "low";
+  notes?: string;
+}
+
+/** What the Labeling agent produced for one image (the label_result event). */
+export interface LabelResult {
+  image_id: string;
+  width: number;
+  height: number;
+  annotations: Annotation[];
+  report: string;
+  exports: { coco: unknown; yolo: { classes: string[]; annotations: string } };
+}
 
 /** One specialist agent and what its MCP server advertises. */
 export interface AgentInfo {
@@ -73,26 +100,42 @@ export async function getAgents(attempts = 4): Promise<AgentsInfo> {
 }
 
 /**
- * POST a message and read the Server-Sent Events response.
- *
- * The browser's EventSource only supports GET, so we read the SSE stream with fetch()
- * and parse the wire format ourselves: events are separated by a blank line, and each
- * has `event: <name>` and one or more `data: <json>` lines. Lines starting with ':' are
- * keep-alive comments. Aborting `signal` stops the stream (the Stop button).
+ * POST a message and read the Server-Sent Events response. Aborting `signal` stops the stream (the Stop button).
  */
-export async function* streamChat(
+export function streamChat(
   message: string,
   conversationId: string | undefined,
   images: ChatImage[],
   signal: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
-  const res = await fetch(`${API_URL}/chat`, {
+  return streamEvents("/chat", { message, conversation_id: conversationId, images }, signal);
+}
+
+/** Upload one image to Image Label and have the Labeling agent annotate it; ends with a label_result event. */
+export function streamLabel(
+  request: { image: ChatImage; instructions: string; labels: string[] },
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  return streamEvents("/label", request, signal);
+}
+
+/**
+ * The browser's EventSource only supports GET, so we read the SSE stream with fetch()
+ * and parse the wire format ourselves: events are separated by a blank line, and each
+ * has `event: <name>` and one or more `data: <json>` lines. Lines starting with ':' are
+ * keep-alive comments.
+ */
+async function* streamEvents(path: string, body: unknown, signal: AbortSignal): AsyncGenerator<AgentEvent> {
+  const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ message, conversation_id: conversationId, images }),
+    body: JSON.stringify(body),
     signal,
   });
-  if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok || !res.body) {
+    const detail = (await res.json().catch(() => ({}))).detail;
+    throw new Error(Array.isArray(detail) ? detail.map((d) => d.msg).join("; ") : `${res.status} ${res.statusText}`);
+  }
 
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";

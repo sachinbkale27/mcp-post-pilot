@@ -107,7 +107,7 @@ function ToolCard({ step }: { step: ToolStep }) {
   );
 }
 
-function AgentCard({ step }: { step: AgentStep }) {
+export function AgentCard({ step }: { step: AgentStep }) {
   const [showTask, setShowTask] = useState(false);
   const running = step.finishedAt === undefined;
   return (
