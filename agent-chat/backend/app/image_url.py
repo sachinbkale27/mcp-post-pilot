@@ -10,7 +10,7 @@ often serve), BMP or TIFF, are converted to JPEG, or PNG when they have transpar
 import io
 import re
 from pathlib import PurePosixPath
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urljoin, urlsplit
 
 import httpx
 from PIL import Image, UnidentifiedImageError
@@ -61,6 +61,17 @@ def convert(data: bytes) -> tuple[bytes, str, str] | None:
     return out.getvalue(), "image/jpeg", source
 
 
+def unwrap(url: str) -> str:
+    """The original image behind an image-resizing proxy address, e.g. Next.js's /_next/image?url=<original>.
+    Fetching the original directly is simpler, and works where the site refuses the proxy to scripts."""
+    parts = urlsplit(url)
+    if parts.path.rstrip("/").endswith("/_next/image"):
+        inner = parse_qs(parts.query).get("url", [""])[0]
+        if inner:
+            return urljoin(url, inner)  # may be relative to the site
+    return url
+
+
 def file_name(url: str, media_type: str) -> str:
     """A short, safe file name from the URL's last path segment, with the right extension."""
     stem = PurePosixPath(unquote(urlsplit(url).path)).stem
@@ -79,6 +90,7 @@ async def download_image(url: str) -> tuple[bytes, str, str]:
             "This address was shortened when it was copied (it contains \u201c\u2026\u201d). Copy the full address: "
             "right-click the image and choose Copy Image Address.",
         )
+    url = unwrap(url)
     try:
         resp, final_url, body = await fetch(url, max_bytes=MAX_IMAGE_BYTES, user_agent=USER_AGENT)
     except FetchError as exc:
@@ -87,6 +99,12 @@ async def download_image(url: str) -> tuple[bytes, str, str]:
         raise ImageUrlError(502, f"Could not download the image ({type(exc).__name__})") from exc
     if resp.status_code == 404:
         raise ImageUrlError(502, "Nothing was found at that address (HTTP 404). Check that it is complete.")
+    if resp.status_code in (401, 403):
+        raise ImageUrlError(
+            502,
+            f"The site refused the download (HTTP {resp.status_code}): it doesn't allow automated downloads. "
+            "Save the image and upload the file instead.",
+        )
     if resp.status_code >= 400:
         raise ImageUrlError(502, f"The address answered HTTP {resp.status_code}")
     if len(body) > MAX_IMAGE_BYTES:

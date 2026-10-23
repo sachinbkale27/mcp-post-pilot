@@ -8,7 +8,7 @@ from PIL import Image
 from fastapi.testclient import TestClient
 
 from app import image_url, main
-from app.image_url import MAX_IMAGE_BYTES, file_name, image_type
+from app.image_url import MAX_IMAGE_BYTES, file_name, image_type, unwrap
 from app.local_mcp.research import FetchError
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 40
@@ -47,7 +47,8 @@ def test_returns_the_image_with_a_safe_name(monkeypatch):
     [
         ({"body": b"<html>gallery page</html>"}, 415, "isn't an image this tool can read"),
         ({"status": 404}, 502, "Check that it is complete"),
-        ({"status": 403}, 502, "HTTP 403"),
+        ({"status": 403}, 502, "doesn't allow automated downloads"),
+        ({"status": 500}, 502, "HTTP 500"),
         ({"body": PNG + b"\x00" * MAX_IMAGE_BYTES}, 413, "larger than 15 MB"),
         ({"error": FetchError("localhost resolves to a non-public address")}, 400, "non-public"),
         ({"error": httpx.ConnectTimeout("slow")}, 502, "ConnectTimeout"),
@@ -102,3 +103,12 @@ def test_decompression_bombs_are_refused(monkeypatch):
     stub_fetch(monkeypatch, body=encoded("BMP"))
     res = post("https://cdn.example/huge.bmp")
     assert res.status_code == 413 and "too large" in res.json()["detail"]
+
+
+def test_image_proxy_addresses_are_unwrapped(monkeypatch):
+    calls = stub_fetch(monkeypatch, final="https://cdn.example/case/c943_detail.jpg")
+    proxy = "https://www.site.example/_next/image?url=https%3A%2F%2Fcdn.example%2Ffit-in%2Fformat(webp)%2Fcase%2Fc943_detail.jpg&w=1920&q=75"
+    assert post(proxy).status_code == 200
+    assert calls[0][0] == "https://cdn.example/fit-in/format(webp)/case/c943_detail.jpg"
+    assert unwrap("https://site.example/_next/image?url=%2Fimages%2Fa.png&w=640") == "https://site.example/images/a.png"
+    assert unwrap("https://site.example/photo.jpg?w=640") == "https://site.example/photo.jpg?w=640"
