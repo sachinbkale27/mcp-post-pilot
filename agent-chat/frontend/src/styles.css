@@ -503,7 +503,16 @@ button { font: inherit; color: inherit; }
   background: color-mix(in srgb, #f59e0b 12%, transparent); color: var(--text-2); font-size: 13px;
 }
 .diagnosis .answer { font-size: 14.5px; }
-.diagnosis-regions { display: grid; gap: 4px; color: var(--text-2); font-size: 13px; }
+.diagnosis-regions { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--text-2); font-size: 13.5px; }
+.diagnosis-regions h4 { margin: 0; font: 600 14px/1.2 var(--font-display); color: var(--text); }
+.label-result-anchor { scroll-margin-top: 12px; }
+.label-result-anchor:empty { display: none; }
+.label-progress {
+  display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 14px; border: 1px dashed var(--line-2);
+  border-radius: 12px; color: var(--text); font-size: 14px;
+}
+.label-progress svg { color: var(--accent); }
+.label-progress span { margin-left: auto; color: var(--text-3); font-size: 12.5px; }
 .diagnosis-regions ul { margin: 0; padding-left: 1.2em; display: grid; gap: 3px; }
 .diagnosis-regions strong { color: var(--text); font-weight: 600; }
 .diagnosis .answer h2 { font-size: 15px; margin-top: 1em; }

@@ -60,6 +60,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
   const [imageUrl, setImageUrl] = useState("");
   const [diagnosis, setDiagnosis] = useState<Diagnosis>();
   const diagnoseAbort = useRef<AbortController | null>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
   const [run, setRun] = useState<Run>();
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -73,6 +74,11 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     const timer = setInterval(() => warmUpLabeling(model), 4 * 60 * 1000);
     return () => clearInterval(timer);
   }, [active, available, model]);
+
+  // Bring the annotated image into view when it arrives
+  useEffect(() => {
+    if (run?.result) resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [run?.result]);
 
   const canRun = available && !busy && upload?.status === "ready" && instructions.trim().length >= 3;
 
@@ -328,6 +334,32 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
 
         <section className="label-panel label-output" aria-live="polite" aria-labelledby="label-result-heading">
           <h3 id="label-result-heading">3. Result</h3>
+          {!run && !diagnosis && <p className="label-empty">The annotated image appears here. Labeling usually takes 10 to 30 seconds.</p>}
+
+          {/* The annotated image comes first: the interpretation below can be long */}
+          <div ref={resultRef} className="label-result-anchor">
+            {run?.result && upload?.preview && <LabelResultView result={run.result} image={upload.preview} name={upload.name} />}
+          </div>
+          {run?.pending && (
+            <p className="label-progress">
+              <LoaderCircle size={15} className="spin" aria-hidden />
+              {diagnosis ? "Outlining the problematic regions on the image…" : "Annotating the image…"}
+              <span>usually 20 to 40 seconds</span>
+            </p>
+          )}
+          {run?.error && <p className="label-alert"><CircleAlert size={16} aria-hidden /> {run.error}</p>}
+
+          {diagnosis?.regions && diagnosis.regions.length > 0 && (
+            <div className="diagnosis-regions">
+              <h4>Problematic regions</h4>
+              <ul>
+                {diagnosis.regions.map((r) => (
+                  <li key={r.label} title={r.description}><strong>{r.label}</strong>: {r.significance}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {diagnosis && (
             <section className="diagnosis" aria-labelledby="diagnosis-heading">
               <h4 id="diagnosis-heading">
@@ -343,26 +375,11 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
               ) : (
                 diagnosis.pending && <p className="label-empty">Looking at the image…</p>
               )}
-              {diagnosis.regions && diagnosis.regions.length > 0 && (
-                <div className="diagnosis-regions">
-                  <span>{run?.pending ? "Outlining the problematic regions…" : "Problematic regions:"}</span>
-                  <ul>
-                    {diagnosis.regions.map((r) => (
-                      <li key={r.label} title={r.description}><strong>{r.label}</strong>: {r.significance}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
               {diagnosis.error && <p className="label-alert"><CircleAlert size={16} aria-hidden /> {diagnosis.error}</p>}
             </section>
           )}
-          {!run && !diagnosis && <p className="label-empty">The annotated image appears here. Labeling usually takes 10 to 30 seconds.</p>}
+
           {run?.steps.map((step) => (step.type === "agent" ? <AgentCard key={step.id} step={step} /> : null))}
-          {run?.pending && !run.steps.length && (
-            <p className="label-empty"><LoaderCircle size={14} className="spin" aria-hidden /> Starting…</p>
-          )}
-          {run?.error && <p className="label-alert"><CircleAlert size={16} aria-hidden /> {run.error}</p>}
-          {run?.result && upload?.preview && <LabelResultView result={run.result} image={upload.preview} name={upload.name} />}
         </section>
       </div>
     </div>
