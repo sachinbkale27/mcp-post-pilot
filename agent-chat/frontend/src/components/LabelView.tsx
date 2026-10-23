@@ -546,6 +546,13 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
         </p>
       )}
 
+      <div className="ask-ai-row">
+        <span>Questions about these results?</span>
+        <a className="ask-ai" href="https://genetics.sachin-kale.com/" target="_blank" rel="noreferrer">
+          <Sparkles size={16} aria-hidden /> Ask AI <SquareArrowOutUpRight size={13} aria-hidden />
+        </a>
+      </div>
+
       <section className="annotate-further" aria-labelledby="annotate-further-heading">
         <h4 id="annotate-further-heading"><PenTool size={15} aria-hidden /> Download and annotate further</h4>
         <div className="label-downloads">
@@ -592,9 +599,6 @@ function LabelResultView({ result, image, name }: { result: LabelResult; image: 
         <details className="label-report">
           <summary>Agent's report</summary>
           <div className="answer"><Markdown remarkPlugins={[remarkGfm]}>{result.report}</Markdown></div>
-          <a className="label-download ask-ai" href="https://genetics.sachin-kale.com/" target="_blank" rel="noreferrer">
-            <Sparkles size={14} aria-hidden /> Ask AI <SquareArrowOutUpRight size={13} aria-hidden />
-          </a>
         </details>
       )}
       <p className="label-saved">

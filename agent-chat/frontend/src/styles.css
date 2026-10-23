@@ -729,4 +729,18 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 .annotate-further ol a { color: var(--accent); font-weight: 600; }
 a.label-download { text-decoration: none; }
 .label-download.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.label-report .ask-ai { margin-top: 10px; }
+
+/* ---- Ask AI ---- */
+.ask-ai-row {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin-top: 12px;
+  padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, color-mix(in srgb, #7c3aed 12%, transparent), color-mix(in srgb, var(--accent) 12%, transparent));
+  border: 1px solid color-mix(in srgb, #7c3aed 30%, transparent);
+}
+.ask-ai-row span { color: var(--text); font-size: 14px; font-weight: 500; }
+.ask-ai {
+  display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 999px;
+  background: linear-gradient(135deg, #7c3aed, #db2777); color: #fff; font: 600 14px/1 var(--font-ui);
+  text-decoration: none; box-shadow: 0 4px 14px rgb(124 58 237 / 0.35); transition: transform 0.15s, box-shadow 0.15s;
+}
+.ask-ai:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgb(124 58 237 / 0.45); }
+.ask-ai:focus-visible { outline: 3px solid color-mix(in srgb, #7c3aed 50%, transparent); outline-offset: 2px; }
