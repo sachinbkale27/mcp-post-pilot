@@ -7,7 +7,7 @@ returns the address that opens a chat about it: genetics.sachin-kale.com/?result
 
 import asyncio
 import os
-from typing import Literal
+from typing import Annotated, Literal
 
 import httpx
 from pydantic import BaseModel, Field
@@ -21,6 +21,7 @@ class Finding(BaseModel):
     label: str = Field(max_length=120)
     count: int = Field(1, ge=0, le=10000)
     significance: str = Field("", max_length=400)
+    box: list[Annotated[float, Field(ge=0, le=1)]] | None = Field(None, min_length=4, max_length=4)
 
 
 class Nuclei(BaseModel):
@@ -40,6 +41,7 @@ class ResultsHandoff(BaseModel):
     """What genapi's POST /api/v1/results accepts."""
 
     image_url: str | None = Field(None, max_length=500, pattern=r"^https://[\w.-]+(/[\w./%-]*)?$")
+    figure_url: str | None = Field(None, max_length=500, pattern=r"^https://[\w.-]+(/[\w./%-]*)?$")
     image_name: str = Field("", max_length=200)
     suspected_diagnosis: str = Field("", max_length=200)
     findings: list[Finding] = Field(default_factory=list, max_length=20)

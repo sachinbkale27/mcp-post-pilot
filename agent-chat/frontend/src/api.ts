@@ -209,9 +209,10 @@ export const GENETICS_URL = import.meta.env.VITE_GENETICS_URL ?? "https://geneti
 /** A summary of an image analysis for genetics.sachin-kale.com's assistant ("Ask AI"). */
 export interface ResultsHandoff {
   image_url?: string;
+  figure_url?: string; // the annotated figure, uploaded for the handoff
   image_name: string;
   suspected_diagnosis: string;
-  findings: { label: string; count: number; significance: string }[];
+  findings: { label: string; count: number; significance: string; box?: number[] }[];
   nuclei?: NucleiSummary;
   quality?: { verdict: QualityResult["verdict"]; warnings: string[] };
   interpretation: string;

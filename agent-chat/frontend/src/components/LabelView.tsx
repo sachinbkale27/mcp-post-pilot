@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import { CircleAlert, CircleCheck, Download, FlaskConical, PenTool, Sparkles, SquareArrowOutUpRight, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
 import {
   BLOG_URL, GENETICS_URL, fetchImageFromUrl, handOffResults, streamDiagnosis, streamLabel, streamPathology, uploadImage, warmUpLabeling,
-  type AgentEvent, type DiagnosisRegion, type LabelResult, type NucleiSummary, type PathologyAction, type QualityResult,
+  type AgentEvent, type Annotation, type DiagnosisRegion, type LabelResult, type NucleiSummary, type PathologyAction, type QualityResult,
 } from "../api";
 import { applyEvent } from "../lib/events";
 import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
@@ -239,19 +239,35 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
         '<p style="font:16px system-ui,sans-serif;color:#555;margin:40vh auto 0;text-align:center">' +
         "Preparing your results for the genetics assistant…</p>";
     }
-    const annotations = run?.result?.annotations ?? [];
+    const result = run?.result;
+    const annotations = result?.annotations ?? [];
     const counts = new Map<string, number>();
+    const largest = new Map<string, Annotation>(); // the biggest example of each finding, for a close-up
     for (const a of annotations) {
       if (/nucleus$/i.test(a.label) || /^suspected\b/i.test(a.label)) continue;
       counts.set(a.label, (counts.get(a.label) ?? 0) + 1);
+      if (shapeArea(a) > shapeArea(largest.get(a.label))) largest.set(a.label, a);
     }
+    const blog = BLOG_URL.replace(/\/+$/, "");
+    // The annotated figure, so the questions can show it (best effort: the handoff works without it)
+    let figureUrl: string | undefined;
+    try {
+      const figure = await renderFigure(1200, "image/webp");
+      if (figure && blog.startsWith("https://")) figureUrl = `${blog}${await uploadImage(figure)}`;
+    } catch { /* no figure */ }
     const significance = new Map((diagnosis?.regions ?? []).map((r) => [r.label, r.significance]));
     try {
       const url = await handOffResults({
-        image_url: upload?.url?.startsWith("/") && BLOG_URL.startsWith("https://") ? `${BLOG_URL.replace(/\/+$/, "")}${upload.url}` : undefined,
+        image_url: upload?.url?.startsWith("/") && blog.startsWith("https://") ? `${blog}${upload.url}` : undefined,
+        figure_url: figureUrl,
         image_name: (upload?.name ?? "").slice(0, 200),
         suspected_diagnosis: (diagnosis?.suspected ?? "").slice(0, 200),
-        findings: [...counts].slice(0, 20).map(([label, count]) => ({ label: label.slice(0, 120), count, significance: (significance.get(label) ?? "").slice(0, 400) })),
+        findings: [...counts].slice(0, 20).map(([label, count]) => ({
+          label: label.slice(0, 120),
+          count,
+          significance: (significance.get(label) ?? "").slice(0, 400),
+          box: result ? closeUpBox(largest.get(label), result.width, result.height) : undefined,
+        })),
         nuclei: run?.result?.nuclei_summary ?? lastNuclei,
         quality: lastQuality && { verdict: lastQuality.verdict, warnings: lastQuality.warnings.slice(0, 8) },
         interpretation: (diagnosis?.text ?? "").slice(0, 8000),
@@ -669,8 +685,33 @@ function downloadDataUrl(dataUrl: string, filename: string) {
 
 /** The annotated figure (image, outlines and callouts) as a PNG, drawn from the SVG on the page. */
 async function downloadFigure(base: string) {
+  const blob = await renderFigure(1600, "image/png");
+  if (blob) downloadDataUrl(URL.createObjectURL(blob), `${base}-annotated.png`);
+}
+
+function shapeArea(a?: Annotation): number {
+  if (!a) return -1;
+  return a.type === "circle" ? Math.PI * (a.radius ?? 0) ** 2 : (a.width ?? 0) * (a.height ?? 0);
+}
+
+/** A square close-up around a shape, padded, as [x, y, width, height] fractions of the image. */
+function closeUpBox(a: Annotation | undefined, width: number, height: number): number[] | undefined {
+  if (!a || !width || !height) return undefined;
+  const [x, y, w, h] = a.type === "circle"
+    ? [(a.x ?? 0) - (a.radius ?? 0), (a.y ?? 0) - (a.radius ?? 0), 2 * (a.radius ?? 0), 2 * (a.radius ?? 0)]
+    : [a.x ?? 0, a.y ?? 0, a.width ?? 0, a.height ?? 0];
+  // Square in pixels, so the thumbnail isn't stretched; at least a tenth of the image, and never bigger than it
+  const side = Math.min(Math.max(w, h, Math.min(width, height) / 10) * 1.3, width, height);
+  const cx = Math.min(Math.max(x + w / 2, side / 2), width - side / 2);
+  const cy = Math.min(Math.max(y + h / 2, side / 2), height - side / 2);
+  const round = (v: number) => Math.round(Math.min(Math.max(v, 0), 1) * 1000) / 1000;
+  return [round((cx - side / 2) / width), round((cy - side / 2) / height), round(side / width), round(side / height)];
+}
+
+/** The annotated figure on the page, drawn to an image at least minWidth pixels wide. */
+async function renderFigure(minWidth: number, type: "image/png" | "image/webp"): Promise<Blob | null> {
   const svg = document.querySelector<SVGSVGElement>(".annotated-figure");
-  if (!svg) return;
+  if (!svg) return null;
   const clone = svg.cloneNode(true) as SVGSVGElement;
   // Styles from the stylesheet don't travel with the SVG: copy the ones that matter onto each element
   const live = svg.querySelectorAll("*");
@@ -681,7 +722,7 @@ async function downloadFigure(base: string) {
     }
   });
   const { width, height } = svg.viewBox.baseVal;
-  const scale = Math.max(1, 1600 / width); // at least 1600 px wide, so text stays sharp
+  const scale = Math.max(1, minWidth / width); // wide enough for the text to stay sharp
   clone.setAttribute("width", String(width * scale));
   clone.setAttribute("height", String(height * scale));
   const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml" }));
@@ -693,7 +734,7 @@ async function downloadFigure(base: string) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   URL.revokeObjectURL(url);
-  downloadDataUrl(canvas.toDataURL("image/png"), `${base}-annotated.png`);
+  return new Promise((resolve) => canvas.toBlob(resolve, type, 0.85));
 }
 
 function download(filename: string, content: string, type: string) {
