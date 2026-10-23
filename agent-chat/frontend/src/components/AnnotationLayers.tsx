@@ -1,14 +1,16 @@
 /**
- * Draws annotations so they don't bury each other, and lists them in an orderly legend.
+ * Draws annotations so they don't bury each other, with each label named beside the image.
  *
  * Labels fall into three layers, always in the same order and style:
  *   AI interpretation  "Suspected … (AI)": a dashed amber outline, no fill, drawn underneath
  *   Findings           the agent's or user's labels: a palette colour with a light fill
  *   Nuclei             StarDist outlines: thin lines, no fill, drawn on top
- * Shapes carry a small numbered badge instead of their name (badges that would overlap are left out),
- * and the legend gives each number its name, colour and count, grouped by layer.
+ * Each label's name sits in a callout above or below the image, joined to every shape with that label by a
+ * leader line; callouts are split evenly between the two bands and spaced in equal columns across each. Nuclei, which can
+ * number hundreds, get no callouts: the legend names them. The legend lists every label with its colour
+ * and count, grouped by layer.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import type { Annotation } from "../api";
 
@@ -36,11 +38,10 @@ export interface LabelEntry {
   label: string;
   layer: Layer;
   color: string;
-  number: number; // badge number, in legend order
   count: number;
 }
 
-/** One entry per label, ordered by layer and then by size of the group (largest first), numbered 1, 2, … */
+/** One entry per label, ordered by layer and then by size of the group (largest first). */
 export function organize(annotations: Annotation[]): LabelEntry[] {
   const counts = new Map<string, { layer: Layer; count: number }>();
   for (const a of annotations) {
@@ -52,11 +53,10 @@ export function organize(annotations: Annotation[]): LabelEntry[] {
   let findings = 0;
   return [...counts.entries()]
     .sort(([la, a], [lb, b]) => order(a.layer) - order(b.layer) || b.count - a.count || la.localeCompare(lb))
-    .map(([label, { layer, count }], i) => ({
+    .map(([label, { layer, count }]) => ({
       label,
       layer,
       count,
-      number: i + 1,
       color:
         layer === "interpretation" ? INTERPRETATION_COLOR
         : layer === "nuclei" ? (/enlarged/i.test(label) ? ENLARGED_COLOR : NUCLEUS_COLOR)
@@ -64,25 +64,122 @@ export function organize(annotations: Annotation[]): LabelEntry[] {
     }));
 }
 
-function anchorOf(a: Annotation): { x: number; y: number } {
-  if (a.type === "polygon" && a.points?.length) {
-    // The topmost point: the badge sits on the outline's upper edge, clear of its inside
-    return a.points.reduce((top, p) => (p.y < top.y ? p : top), a.points[0]);
+interface Point { x: number; y: number }
+
+function points(a: Annotation): Point[] {
+  if (a.type === "polygon" && a.points?.length) return a.points;
+  if (a.type === "circle") {
+    const r = a.radius ?? 0;
+    return [{ x: (a.x ?? 0) - r, y: a.y ?? 0 }, { x: (a.x ?? 0) + r, y: a.y ?? 0 }, { x: a.x ?? 0, y: (a.y ?? 0) - r }];
   }
-  if (a.type === "circle") return { x: a.x ?? 0, y: (a.y ?? 0) - (a.radius ?? 0) };
-  return { x: a.x ?? 0, y: a.y ?? 0 };
+  if (a.type === "rectangle") {
+    const x = a.x ?? 0, y = a.y ?? 0, w = a.width ?? 0, h = a.height ?? 0;
+    return [{ x, y: y + h / 2 }, { x: x + w, y: y + h / 2 }];
+  }
+  return [{ x: a.x ?? 0, y: a.y ?? 0 }];
 }
 
-/** Badge positions: one per shape, skipping any that would overlap a badge already placed. */
-export function placeBadges(annotations: Annotation[], radius: number, width: number, height: number) {
-  const placed: { id: string; x: number; y: number }[] = [];
-  for (const a of annotations) {
-    const p = anchorOf(a);
-    const x = Math.min(Math.max(p.x, radius), width - radius);
-    const y = Math.min(Math.max(p.y, radius), height - radius);
-    if (placed.every((b) => Math.hypot(b.x - x, b.y - y) >= radius * 2.4)) placed.push({ id: a.id, x, y });
+function center(a: Annotation): Point {
+  const pts = points(a);
+  return { x: avg(pts.map((p) => p.x)), y: avg(pts.map((p) => p.y)) };
+}
+
+/** Where a leader line meets a shape: its edge facing the callout's band. */
+function edgeToward(a: Annotation, side: "top" | "bottom"): Point {
+  return points(a).reduce((best, p) => ((side === "top" ? p.y < best.y : p.y > best.y) ? p : best));
+}
+
+function avg(values: number[]): number {
+  return values.reduce((n, v) => n + v, 0) / Math.max(1, values.length);
+}
+
+export function wrap(text: string, maxChars: number, maxLines = 3): string[] {
+  const lines: string[] = [];
+  for (const word of text.split(/\s+/)) {
+    const last = lines[lines.length - 1];
+    if (last !== undefined && `${last} ${word}`.length <= maxChars) lines[lines.length - 1] = `${last} ${word}`;
+    else lines.push(word);
   }
-  return placed;
+  if (lines.length > maxLines) {
+    const rest = lines.slice(maxLines - 1).join(" ");
+    lines.splice(maxLines - 1, lines.length, rest.length > maxChars ? `${rest.slice(0, maxChars - 1)}…` : rest);
+  }
+  return lines;
+}
+
+export interface Callout {
+  entry: LabelEntry;
+  side: "top" | "bottom";
+  lines: string[];
+  x: number; // box left edge, in figure units
+  y: number; // box top, in figure units (the image starts at bandTop)
+  width: number;
+  height: number;
+  targets: Point[]; // where the leader lines end, in figure units
+}
+
+/**
+ * One callout per label, in a band above or below the image: labels whose shapes are in the upper half go
+ * above, the rest below, keeping the two bands as even as possible; each band is divided into equal
+ * columns, ordered left to right like the shapes, and every callout is joined to each of its shapes.
+ * `scale` is screen pixels per image pixel, so text keeps a readable size however large the image is.
+ */
+export function layoutCallouts(groups: { entry: LabelEntry; shapes: Annotation[] }[], width: number, height: number, scale: number) {
+  const font = 12 / scale;
+  const lineHeight = font * 1.25;
+  const pad = font * 0.5;
+  const gutter = font * 1.6; // between the callouts and the image, where leaders bend
+  const withCenters = groups
+    .filter((g) => g.shapes.length)
+    .map((g) => ({ ...g, c: { x: avg(g.shapes.map((s) => center(s).x)), y: avg(g.shapes.map((s) => center(s).y)) } }))
+    .sort((a, b) => a.c.y - b.c.y);
+  // Even bands: the upper half of the labels (by where their shapes are) above, the rest below
+  const mid = Math.floor(withCenters.length / 2);
+  const half = mid + (withCenters.length % 2 && withCenters[mid].c.y < height / 2 ? 1 : 0);
+  const bands = { top: withCenters.slice(0, half), bottom: withCenters.slice(half) };
+  const minColumn = font * 9;
+  const sized = (["top", "bottom"] as const).map((side) => {
+    const items = bands[side].sort((a, b) => a.c.x - b.c.x);
+    const perRow = Math.max(1, Math.min(items.length, Math.floor(width / minColumn)));
+    const columnWidth = width / perRow;
+    const boxWidth = columnWidth - font * 0.8;
+    const maxChars = Math.max(6, Math.floor((boxWidth - pad * 2) / (font * 0.55)));
+    const rows: { g: (typeof items)[number]; lines: string[]; col: number }[][] = [];
+    items.forEach((g, i) => {
+      if (i % perRow === 0) rows.push([]);
+      rows[rows.length - 1].push({ g, lines: wrap(g.entry.label + (g.shapes.length > 1 ? ` ×${g.shapes.length}` : ""), maxChars), col: i % perRow });
+    });
+    const rowHeights = rows.map((r) => Math.max(...r.map((b) => b.lines.length)) * lineHeight + pad * 2);
+    const bandHeight = rows.length ? rowHeights.reduce((n, h) => n + h, 0) + font * 0.4 * (rows.length - 1) + gutter : 0;
+    return { side, rows, rowHeights, columnWidth, boxWidth, perRow, bandHeight };
+  });
+  const [top, bottom] = sized;
+  const imageTop = top.bandHeight;
+  const callouts: Callout[] = [];
+  for (const band of sized) {
+    let y = band.side === "top" ? 0 : imageTop + height + gutter;
+    band.rows.forEach((row, r) => {
+      // A short last row is centred, so the band stays symmetric
+      const offset = ((band.perRow - row.length) * band.columnWidth) / 2;
+      for (const b of row) {
+        callouts.push({
+          entry: b.g.entry,
+          side: band.side,
+          lines: b.lines,
+          x: offset + b.col * band.columnWidth + font * 0.4,
+          y,
+          width: band.boxWidth,
+          height: band.rowHeights[r],
+          targets: b.g.shapes.map((s) => {
+            const p = edgeToward(s, band.side);
+            return { x: p.x, y: p.y + imageTop };
+          }),
+        });
+      }
+      y += band.rowHeights[r] + font * 0.4;
+    });
+  }
+  return { callouts, font, lineHeight, pad, imageTop, figureHeight: imageTop + height + bottom.bandHeight };
 }
 
 interface Props {
@@ -97,19 +194,31 @@ export function AnnotatedImage({ annotations, image, name, width, height }: Prop
   const entries = useMemo(() => organize(annotations), [annotations]);
   const byLabel = useMemo(() => new Map(entries.map((e) => [e.label, e])), [entries]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const [focus, setFocus] = useState<string>(); // legend hover: the other labels fade
-  const [badges, setBadges] = useState(true);
+  const [focus, setFocus] = useState<string>(); // legend or callout hover: the other labels fade
+  const [showCallouts, setShowCallouts] = useState(true);
 
-  const size = Math.max(width, height);
-  const stroke = Math.max(2, size / 300);
-  const radius = Math.max(9, size / 70);
+  const stroke = Math.max(2, Math.max(width, height) / 300);
   const order = (a: Annotation) => LAYERS.findIndex((l) => l.id === byLabel.get(a.label)?.layer);
   // Interpretation underneath, findings, then nuclei on top; within a layer, larger shapes first
   const visible = annotations
     .filter((a) => !hidden.has(a.label))
     .sort((a, b) => order(a) - order(b) || area(b) - area(a));
-  // Nuclei get no badges: there can be hundreds, and the legend names them
-  const placed = placeBadges(visible.filter((a) => byLabel.get(a.label)?.layer !== "nuclei"), radius, width, height);
+  const groups = entries
+    .filter((e) => e.layer !== "nuclei" && !hidden.has(e.label))
+    .map((entry) => ({ entry, shapes: visible.filter((a) => a.label === entry.label) }));
+  // Screen pixels per image pixel, so callout text stays about 12 px at any size
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [shownWidth, setShownWidth] = useState(width);
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([e]) => setShownWidth(e.contentRect.width || width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [width]);
+  const layout = layoutCallouts(showCallouts ? groups : [], width, height, Math.max(0.05, shownWidth / width));
+  const faded = (label: string) => focus !== undefined && focus !== label;
+  const lineWidth = Math.max(1.5, stroke * 0.8, 1.5 / Math.max(0.05, shownWidth / width));
 
   const toggle = (labels: string[]) =>
     setHidden((h) => {
@@ -121,21 +230,45 @@ export function AnnotatedImage({ annotations, image, name, width, height }: Prop
 
   return (
     <>
-      <div className="label-canvas">
-        <img src={image} alt={`${name} with ${annotations.length} annotations`} />
-        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden>
-          {visible.map((a) => {
-            const entry = byLabel.get(a.label)!;
+      <div className="label-canvas" ref={canvasRef}>
+        <svg viewBox={`0 0 ${width} ${layout.figureHeight}`} role="img" aria-label={`${name} with ${annotations.length} annotations`} className="annotated-figure">
+          <image href={image} x={0} y={layout.imageTop} width={width} height={height} preserveAspectRatio="none" />
+          <g transform={`translate(0 ${layout.imageTop})`}>
+            {visible.map((a) => (
+              <Shape key={a.id} annotation={a} entry={byLabel.get(a.label)!} stroke={stroke} faded={faded(a.label)} />
+            ))}
+          </g>
+          {layout.callouts.map((c) => {
+            const startX = c.x + c.width / 2;
+            const startY = c.side === "top" ? c.y + c.height : c.y;
+            // Leaders run straight out of the callout to the image edge, then on to each shape
+            const elbowY = c.side === "top" ? layout.imageTop : layout.imageTop + height;
             return (
-              <Shape key={a.id} annotation={a} entry={entry} stroke={stroke} faded={focus !== undefined && focus !== a.label} />
-            );
-          })}
-          {badges && placed.map((b) => {
-            const entry = byLabel.get(visible.find((a) => a.id === b.id)!.label)!;
-            return (
-              <g key={b.id} className="shape-badge" opacity={focus && focus !== entry.label ? 0.15 : 1}>
-                <circle cx={b.x} cy={b.y} r={radius} fill={entry.color} />
-                <text x={b.x} y={b.y} fontSize={radius * 1.15} textAnchor="middle" dominantBaseline="central">{entry.number}</text>
+              <g
+                key={c.entry.label}
+                className="callout"
+                opacity={faded(c.entry.label) ? 0.15 : 1}
+                onMouseEnter={() => setFocus(c.entry.label)}
+                onMouseLeave={() => setFocus(undefined)}
+              >
+                {c.targets.map((t, i) => {
+                  const d = `M ${startX} ${startY} L ${startX} ${elbowY} L ${t.x} ${t.y}`;
+                  return (
+                    <g key={i}>
+                      <path d={d} className="leader-halo" strokeWidth={lineWidth * 3} />
+                      <path d={d} stroke={c.entry.color} strokeWidth={lineWidth} fill="none" />
+                      <circle cx={t.x} cy={t.y} r={lineWidth * 2.2} fill={c.entry.color} stroke="#fff" strokeWidth={lineWidth * 0.6} />
+                    </g>
+                  );
+                })}
+                <rect x={c.x} y={c.y} width={c.width} height={c.height} rx={layout.font * 0.35} className="callout-box" stroke={c.entry.color} strokeWidth={lineWidth} />
+                <text fontSize={layout.font} className="callout-text">
+                  {c.lines.map((line, i) => (
+                    <tspan key={i} x={c.x + c.width / 2} y={c.y + layout.pad + layout.lineHeight * (i + 0.78)} textAnchor="middle">
+                      {line}
+                    </tspan>
+                  ))}
+                </text>
               </g>
             );
           })}
@@ -167,9 +300,10 @@ export function AnnotatedImage({ annotations, image, name, width, height }: Prop
                     aria-pressed={!hidden.has(r.label)}
                     title={`${r.label}: click to ${hidden.has(r.label) ? "show" : "hide"}`}
                   >
-                    {id === "nuclei" ? <span className="legend-badge ring" style={{ borderColor: r.color }} /> : (
-                      <span className="legend-badge" style={{ background: r.color }}>{r.number}</span>
-                    )}
+                    <span
+                      className={id === "nuclei" ? "legend-badge ring" : "legend-badge"}
+                      style={id === "nuclei" ? { borderColor: r.color } : { background: r.color }}
+                    />
                     <span className="legend-name">{r.label}</span>
                     <span className="count">{r.count}</span>
                   </button>
@@ -178,9 +312,9 @@ export function AnnotatedImage({ annotations, image, name, width, height }: Prop
             </section>
           );
         })}
-        {placed.length > 0 && (
-          <button className="link-btn legend-text" onClick={() => setBadges(!badges)}>
-            {badges ? <EyeOff size={13} aria-hidden /> : <Eye size={13} aria-hidden />} {badges ? "Hide" : "Show"} numbers
+        {groups.length > 0 && (
+          <button className="link-btn legend-text" onClick={() => setShowCallouts(!showCallouts)}>
+            {showCallouts ? <EyeOff size={13} aria-hidden /> : <Eye size={13} aria-hidden />} {showCallouts ? "Hide" : "Show"} label callouts
           </button>
         )}
       </div>

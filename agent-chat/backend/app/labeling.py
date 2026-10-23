@@ -69,7 +69,11 @@ async def warm_up(model: str = "sam") -> bool:
     try:
         spec = labeling_agent()
         async with asyncio.timeout(15), connect(spec) as mcp:
-            _, is_error = await call_mcp_tool(mcp, "warm_up_segmentation", {"model": model})
+            (_, is_error), _ = await asyncio.gather(
+                call_mcp_tool(mcp, "warm_up_segmentation", {"model": model}),
+                # The histology tools' nuclei model too: its first run in a new container is slow
+                call_mcp_tool(mcp, "warm_up_pathology", {}),
+            )
         return not is_error
     except Exception:  # an older label server without the tool, or it's offline: labeling still works
         return False

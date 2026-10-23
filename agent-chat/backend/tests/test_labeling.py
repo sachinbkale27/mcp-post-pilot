@@ -34,6 +34,7 @@ def label_server(monkeypatch):
         calls.append((name, arguments))
         results = {
             "warm_up_segmentation": {"warming": "sam"},
+            "warm_up_pathology": {"warming": "nuclei"},
             "upload_image_from_url": {"imageId": "img-1", "width": 200, "height": 100},
             "get_image": {"imageId": "img-1", "width": 200, "height": 100, "annotations": SAVED},
             "export_annotations": EXPORTS.get(arguments.get("format")),

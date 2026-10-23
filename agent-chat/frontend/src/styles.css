@@ -706,3 +706,12 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 }
 .legend-badge.ring { box-sizing: border-box; border: 2.5px solid; background: none; }
 .legend .legend-text { justify-self: start; }
+
+/* ---- callouts beside the annotated image ---- */
+.label-canvas .annotated-figure { position: static; display: block; width: 100%; height: auto; }
+.callout { cursor: default; }
+.callout-box { fill: var(--panel); }
+.callout-text { fill: var(--text); font-family: var(--font-ui); font-weight: 600; }
+.callout-count { fill: var(--text-3); font-weight: 500; }
+.leader-halo { fill: none; stroke: rgb(255 255 255 / 0.75); stroke-linejoin: round; }
+.label-canvas:has(.annotated-figure) { justify-self: stretch; overflow: visible; background: none; }
