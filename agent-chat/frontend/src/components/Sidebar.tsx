@@ -1,4 +1,4 @@
-import { BookText, Bot, FileCode2, FlaskConical, MessageSquarePlus, MessagesSquare, Network, PanelLeftClose, ScanSearch, SquareArrowOutUpRight } from "lucide-react";
+import { BookText, Bot, FileCode2, FlaskConical, MessageSquarePlus, MessagesSquare, Network, PanelLeftClose, ScanSearch, Sparkles, SquareArrowOutUpRight } from "lucide-react";
 import { BLOG_URL, type AgentInfo, type AgentsInfo } from "../api";
 import { toolMeta } from "../lib/tools";
 
@@ -115,6 +115,9 @@ export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, 
             <FlaskConical size={16} aria-hidden /> Clinical Trials
           </button>
         )}
+        <a href="https://genetics.sachin-kale.com/" target="_blank" rel="noreferrer">
+          <Sparkles size={16} aria-hidden /> Ask AI <SquareArrowOutUpRight size={13} className="external" aria-hidden />
+        </a>
       </nav>
 
       <section className="panel">

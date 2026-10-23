@@ -421,11 +421,13 @@ button { font: inherit; color: inherit; }
 /* ------------------------------------------------------------------ views */
 .scroll[hidden] { display: none; }
 .view-nav { display: grid; gap: 4px; }
-.view-nav button {
+.view-nav button, .view-nav a {
   display: flex; align-items: center; gap: 9px; padding: 9px 12px; border: 1px solid transparent; border-radius: 10px;
   background: none; color: var(--text-2); font: 500 14px/1.2 var(--font-ui); text-align: left; cursor: pointer;
 }
-.view-nav button:hover { color: var(--text); background: var(--raised); }
+.view-nav button:hover, .view-nav a:hover { color: var(--text); background: var(--raised); }
+.view-nav a { text-decoration: none; }
+.view-nav a .external { margin-left: auto; color: var(--text-3); }
 .view-nav button.active { color: var(--text); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 .view-nav button.active svg { color: var(--accent); }
 
