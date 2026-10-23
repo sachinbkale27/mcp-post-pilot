@@ -80,6 +80,7 @@ export interface Trial {
   nearest_site: { facility: string; city: string; country: string; status: string; distance_km?: number } | null;
   url: string;
   why_matched: string;
+  evidence?: string;
   to_confirm: string[];
 }
 

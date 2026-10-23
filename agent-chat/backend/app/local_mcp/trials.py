@@ -7,8 +7,8 @@ also serves it over Streamable HTTP for the MCP Inspector.
   get_trial        one trial's design, arms, eligibility criteria and outcomes
   trial_locations  a trial's sites, nearest first
   submit_trials    files the trials to show the user. Only trials this session read from the registry are
-                   accepted, and the cards are built from registry data, so a report can't carry invented
-                   trial ids, statuses or sites
+                   accepted, each match must quote the trial's record, and the cards are built from registry
+                   data, so a report can't carry invented trial ids, statuses, sites or criteria
 
 Each connection gets its own server (create_server), which remembers the trials it read.
 """
@@ -22,6 +22,8 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 from pydantic import BaseModel, Field
+
+from .research import quote_found
 
 API = "https://clinicaltrials.gov/api/v2/studies"
 STUDY_URL = "https://clinicaltrials.gov/study/"
@@ -57,6 +59,10 @@ class Near(BaseModel):
 class TrialPick(BaseModel):
     nct_id: str = Field(pattern=NCT_ID)
     why_matched: str = Field(description="Which of the user's criteria this trial fits, in one sentence")
+    evidence: str = Field(
+        description="Words copied exactly from the trial's record (title, summary, conditions or eligibility "
+        "criteria) that show it fits, e.g. the inclusion criterion about prior treatment"
+    )
     to_confirm: list[str] = Field(
         default_factory=list,
         description="Eligibility points only the trial team can confirm (key exclusions, prior treatment, biomarkers)",
@@ -197,6 +203,22 @@ def summary(study: dict, near: Near | None = None, country: str | None = None) -
     }
 
 
+def record_text(study: dict) -> str:
+    """The parts of a record a match can quote: titles, summary, conditions, keywords, interventions, arms and
+    eligibility criteria."""
+    p = study.get("protocolSection", {})
+    ident, arms = p.get("identificationModule", {}), p.get("armsInterventionsModule", {})
+    parts = [
+        ident.get("briefTitle", ""), ident.get("officialTitle", ""),
+        p.get("descriptionModule", {}).get("briefSummary", ""),
+        *p.get("conditionsModule", {}).get("conditions", []), *p.get("conditionsModule", {}).get("keywords", []),
+        *(i.get("name", "") for i in arms.get("interventions", [])),
+        *(a.get("description", "") for a in arms.get("armGroups", [])),
+        p.get("eligibilityModule", {}).get("eligibilityCriteria", ""),
+    ]
+    return "\n".join(part for part in parts if part)
+
+
 def details(study: dict) -> dict:
     """What get_trial adds to the summary: the design, arms, eligibility criteria and outcomes."""
     p = study.get("protocolSection", {})
@@ -271,7 +293,13 @@ def create_server() -> MCPServer:
         "show with submit_trials.",
     )
     seen: dict[str, dict] = {}  # nct id -> summary, for every trial read in this session
-    last_near: list[Near] = []  # the latest search's place, so cards can show the nearest site
+    texts: dict[str, str] = {}  # nct id -> its record's text, which matches must quote
+    place: dict[str, Any] = {}  # the latest search's near and country, so cards show the nearest site
+
+    def remember(study: dict, near: Near | None = None, country: str | None = None) -> dict:
+        card = summary(study, near or place.get("near"), country or place.get("country"))
+        seen[card["nct_id"]], texts[card["nct_id"]] = card, record_text(study)
+        return card
     refusals: list[list[str]] = []
 
     @mcp.tool(annotations=READ_ONLY)
@@ -308,12 +336,9 @@ def create_server() -> MCPServer:
             condition, intervention, keywords, near, country, chosen, phases, age_years, sex, sort, max_results
         )
         data = await registry_get("", params)
-        last_near[:] = [near] if near else []
-        trials = []
-        for study in data.get("studies", []):
-            card = summary(study, near, country)
-            seen[card["nct_id"]] = card
-            trials.append(card)
+        place.clear()
+        place.update(near=near, country=country)
+        trials = [remember(study) for study in data.get("studies", [])]
         result: dict[str, Any] = {"total": data.get("totalCount", len(trials)), "returned": len(trials), "trials": trials}
         if not trials:
             result["hint"] = (
@@ -330,10 +355,7 @@ def create_server() -> MCPServer:
             nct_id: The trial's registry id, e.g. "NCT04657991".
         """
         study = await registry_get(f"/{nct_id}")
-        near = last_near[0] if last_near else None
-        card = summary(study, near)
-        seen[nct_id] = card
-        return {**card, **details(study)}
+        return {**remember(study), **details(study)}
 
     @mcp.tool(annotations=READ_ONLY)
     async def trial_locations(
@@ -353,7 +375,7 @@ def create_server() -> MCPServer:
             limit: How many sites to return.
         """
         study = await registry_get(f"/{nct_id}")
-        seen[nct_id] = summary(study, near or (last_near[0] if last_near else None), country)
+        remember(study, near, country)
         found = sites(study, near, country)
         if recruiting_only:
             found = [s for s in found if s["status"] in ("Recruiting", "Not yet recruiting")]
@@ -367,8 +389,10 @@ def create_server() -> MCPServer:
     ) -> dict:
         """File the trials to show the user, best match first, and get the formatted report. Call it once.
 
-        Only trials you read in this session with search_trials, get_trial or trial_locations are accepted; the
-        status, phase, sites and dates are taken from the registry, not from you. An empty list is fine when
+        Only trials you read in this session with search_trials, get_trial or trial_locations are accepted, and
+        each one's evidence must be copied exactly from its record (a criterion, the title or the summary); the
+        status, phase, sites and dates are taken from the registry, not from you. Don't list a trial whose
+        criteria exclude the user (for example "no prior EGFR TKI" when they had one). An empty list is fine when
         nothing matched: say so in summary_text and suggest how to broaden the search in notes.
 
         Args:
@@ -376,18 +400,28 @@ def create_server() -> MCPServer:
             trials: The trials to show, each with why it matched and what the trial team must confirm.
             notes: Search tips or caveats, e.g. "No trials within 100 km; 3 more within 500 km".
         """
-        unknown = [t.nct_id for t in trials if t.nct_id not in seen]
-        if unknown and not refusals:
-            refusals.append(unknown)
+        problems: dict[int, str] = {}  # pick index -> why it was not accepted
+        for i, t in enumerate(trials):
+            if t.nct_id not in seen:
+                problems[i] = "not read in this session; look it up with get_trial"
+            elif not quote_found(t.evidence, texts[t.nct_id]):
+                problems[i] = "its evidence is not an exact quote (of 15+ characters) from its record"
+        if problems and not refusals:
+            refusals.append(problems)
             raise ToolError(
-                f"Not read in this session: {', '.join(unknown)}. Look them up with get_trial (or drop them) and "
-                "submit again; trials still unread will be left out."
+                "Not accepted: " + "; ".join(f"{trials[i].nct_id}: {why}" for i, why in problems.items())
+                + ". Fix these (read the trial, copy the words exactly) or drop them, and submit again; trials "
+                "still not fixed will be left out."
             )
-        cards = [{**seen[t.nct_id], "why_matched": t.why_matched, "to_confirm": t.to_confirm[:5]}
-                 for t in trials if t.nct_id in seen]
+        cards = [
+            {**seen[t.nct_id], "why_matched": t.why_matched, "evidence": t.evidence, "to_confirm": t.to_confirm[:5]}
+            for i, t in enumerate(trials)
+            if i not in problems
+        ]
         all_notes = list(notes or [])
-        if unknown:
-            all_notes.append(f"Left out {', '.join(unknown)}: not found in the registry in this session.")
+        if problems:
+            left_out = ", ".join(dict.fromkeys(trials[i].nct_id for i in problems))
+            all_notes.append(f"Left out {left_out}: the match could not be confirmed from the registry record.")
         return {"result": format_report(summary_text, cards, all_notes), "trials": cards}
 
     return mcp

@@ -591,3 +591,4 @@ button { font: inherit; color: inherit; }
 .trial-source { color: var(--text-3); font-size: 12px; }
 .trial-source a { color: var(--accent); }
 .trials-note { margin: 0; color: var(--text-3); font-size: 12px; }
+.trial-evidence { display: block; margin-top: 4px; padding-left: 8px; border-left: 2px solid var(--line-2); color: var(--text-3); font-style: italic; }

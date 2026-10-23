@@ -21,7 +21,7 @@ STUDY = {
         "conditionsModule": {"conditions": ["Melanoma"]},
         "designModule": {"phases": ["PHASE2", "PHASE3"], "studyType": "INTERVENTIONAL", "enrollmentInfo": {"count": 300}},
         "armsInterventionsModule": {"interventions": [{"name": "Drug A", "type": "DRUG"}]},
-        "eligibilityModule": {"minimumAge": "18 Years", "sex": "ALL", "eligibilityCriteria": "Inclusion: ..."},
+        "eligibilityModule": {"minimumAge": "18 Years", "sex": "ALL", "eligibilityCriteria": "Inclusion: progressed on at least one prior anti-PD-1 therapy"},
         "contactsLocationsModule": {
             "locations": [
                 {"facility": "Far Clinic", "city": "Delhi", "country": "India", "status": "RECRUITING",
@@ -96,22 +96,26 @@ async def test_report_only_accepts_trials_read_from_the_registry(monkeypatch):
 
     monkeypatch.setattr(trials, "registry_get", fake_get)
     spec = AgentSpec(name="trials", title="t", description="d", mcp_url="local:trials", prompt="p")
-    pick = {"nct_id": "NCT01234567", "why_matched": "Recruiting phase 2/3 melanoma trial near Pune", "to_confirm": ["No brain metastases"]}
-    invented = {"nct_id": "NCT09999999", "why_matched": "x"}
+    pick = {"nct_id": "NCT01234567", "why_matched": "For melanoma after immunotherapy",
+            "evidence": "Progressed on at least one prior anti-PD-1 therapy", "to_confirm": ["No brain metastases"]}
+    invented = {"nct_id": "NCT09999999", "why_matched": "x", "evidence": "Drug A in Melanoma"}
 
     async with connect(spec) as mcp:
         assert {t.name for t in (await mcp.list_tools()).tools} == {"search_trials", "get_trial", "trial_locations", "submit_trials"}
         refused = await mcp.call_tool("submit_trials", {"summary_text": "s", "trials": [pick]})
-        assert refused.is_error and "Not read in this session: NCT01234567" in refused.content[0].text
+        assert refused.is_error and "NCT01234567: not read in this session" in refused.content[0].text
 
         found = await mcp.call_tool("search_trials", {"condition": "melanoma", "near": PUNE.model_dump(), "age_years": 68})
         assert data(found)["total"] == 1
         assert calls[-1][1]["filter.overallStatus"] == "RECRUITING,NOT_YET_RECRUITING"
+        await mcp.call_tool("get_trial", {"nct_id": "NCT01234567"})  # keeps the search's place for the card
 
-        filed = await mcp.call_tool("submit_trials", {"summary_text": "Searched melanoma near Pune.", "trials": [pick, invented]})
-        assert not filed.is_error  # refused once already: the unread trial is left out
+        made_up = {**pick, "nct_id": "NCT01234567", "evidence": "patients who progressed on osimertinib"}
+        filed = await mcp.call_tool("submit_trials", {"summary_text": "Searched melanoma near Pune.", "trials": [pick, invented, made_up]})
+        assert not filed.is_error  # refused once already: unread trials and unsupported matches are left out
         out = data(filed)
         assert [c["nct_id"] for c in out["trials"]] == ["NCT01234567"]
+        assert out["trials"][0]["evidence"] == pick["evidence"]
         assert out["trials"][0]["nearest_site"]["city"] == "Mumbai, Maharashtra"
         assert "Left out NCT09999999" in out["result"] and "[NCT01234567](https://clinicaltrials.gov/study/NCT01234567)" in out["result"]
         assert "not medical advice" in out["result"]

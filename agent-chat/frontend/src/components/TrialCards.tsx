@@ -64,7 +64,10 @@ export function TrialCards({ trials }: { trials: Trial[] }) {
             )}
             <div className="trial-why">
               <CircleCheck size={14} aria-hidden />
-              <div><strong>Why this matched</strong> {t.why_matched}</div>
+              <div>
+                <strong>Why this matched</strong> {t.why_matched}
+                {t.evidence && <q className="trial-evidence" title="Quoted from the trial's registry record">{t.evidence}</q>}
+              </div>
             </div>
             {t.to_confirm.length > 0 && (
               <div className="trial-confirm">
