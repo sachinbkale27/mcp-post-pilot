@@ -29,7 +29,7 @@ What to label: {instructions}
 {labels}{grid}
 Look at the image, then outline every object to label with one segment_objects call on image {image_id}
 (model "{model}"): give each a rough box that contains the whole object, a little loose rather than tight;
-the segmentation model traces the exact edges (it is already warming up: don't call warm_up_segmentation).
+the segmentation model traces the exact edges (it is already warming up: don't call warm_up).
 If segment_objects fails, or fails for some objects, draw
 those yourself with add_annotations (polygons, confidence "low") and say so.
 
@@ -70,9 +70,9 @@ async def warm_up(model: str = "sam") -> bool:
         spec = labeling_agent()
         async with asyncio.timeout(15), connect(spec) as mcp:
             (_, is_error), _ = await asyncio.gather(
-                call_mcp_tool(mcp, "warm_up_segmentation", {"model": model}),
+                call_mcp_tool(mcp, "warm_up", {"model": model}),
                 # The histology tools' nuclei model too: its first run in a new container is slow
-                call_mcp_tool(mcp, "warm_up_pathology", {}),
+                call_mcp_tool(mcp, "warm_up", {"model": "nuclei"}),
             )
         return not is_error
     except Exception:  # an older label server without the tool, or it's offline: labeling still works
