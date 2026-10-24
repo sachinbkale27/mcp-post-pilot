@@ -643,17 +643,17 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 .trials-patient { margin-top: 8px; }
 
 /* ---- clinical trials FAQ ---- */
-.trials-faq { margin-top: 14px; max-width: 760px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
-.trials-faq summary { list-style: none; cursor: pointer; }
-.trials-faq summary::-webkit-details-marker { display: none; }
-.trials-faq > summary {
+.page-faq { margin-top: 14px; max-width: 760px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.page-faq summary { list-style: none; cursor: pointer; }
+.page-faq summary::-webkit-details-marker { display: none; }
+.page-faq > summary {
   display: flex; align-items: center; gap: 8px; padding: 11px 14px; color: var(--text); font: 600 14.5px/1.3 var(--font-ui);
 }
-.trials-faq > summary svg:first-child { color: var(--accent); }
-.trials-faq > summary span { color: var(--text-3); font-size: 12.5px; font-weight: 400; }
-.trials-faq summary .chevron { flex: none; color: var(--text-3); transition: transform 0.15s; }
-.trials-faq > summary .chevron { margin-left: auto; }
-.trials-faq[open] > summary .chevron, .faq-item[open] > summary .chevron { transform: rotate(90deg); }
+.page-faq > summary svg:first-child { color: var(--accent); }
+.page-faq > summary span { color: var(--text-3); font-size: 12.5px; font-weight: 400; }
+.page-faq summary .chevron { flex: none; color: var(--text-3); transition: transform 0.15s; }
+.page-faq > summary .chevron { margin-left: auto; }
+.page-faq[open] > summary .chevron, .faq-item[open] > summary .chevron { transform: rotate(90deg); }
 .faq-list { display: grid; padding: 0 8px 8px; }
 .faq-item { border-top: 1px solid var(--line); }
 .faq-item > summary { display: flex; align-items: center; gap: 8px; padding: 9px 6px; color: var(--text); font-size: 14px; font-weight: 500; }

@@ -1,8 +1,7 @@
-import type { ReactNode } from "react";
-import { ChevronRight, MessageCircleQuestion } from "lucide-react";
+import { Faq, type FaqItem } from "./Faq";
 
 /** Short questions an ordinary patient asks first; each opens to a plain answer. */
-const FAQ: { q: string; a: ReactNode }[] = [
+const FAQ: FaqItem[] = [
   {
     q: "What is a clinical trial?",
     a: "A research study that tests a new treatment, test or way of caring for people, to see whether it is safe and works better than what is used today.",
@@ -62,21 +61,5 @@ const FAQ: { q: string; a: ReactNode }[] = [
 ];
 
 export function TrialsFaq() {
-  return (
-    <details className="trials-faq">
-      <summary>
-        <MessageCircleQuestion size={16} aria-hidden /> Questions about clinical trials
-        <span>{FAQ.length} short answers</span>
-        <ChevronRight size={15} className="chevron" aria-hidden />
-      </summary>
-      <div className="faq-list">
-        {FAQ.map(({ q, a }) => (
-          <details key={q} className="faq-item">
-            <summary><ChevronRight size={14} className="chevron" aria-hidden /> {q}</summary>
-            <div className="faq-answer">{a}</div>
-          </details>
-        ))}
-      </div>
-    </details>
-  );
+  return <Faq title="Questions about clinical trials" items={FAQ} />;
 }

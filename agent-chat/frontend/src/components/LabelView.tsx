@@ -9,6 +9,7 @@ import {
 import { applyEvent } from "../lib/events";
 import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
 import { AgentCard, type Step } from "./Messages";
+import { AnnotateFaq } from "./AnnotateFaq";
 import { AnnotatedImage, layerOf } from "./AnnotationLayers";
 
 const EXAMPLES = [
@@ -345,8 +346,9 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
         <p>
           Upload an image and say what to label. The Image Annotation Agent saves it in Image Label and finds each
           object; Segment Anything (or MedSAM for medical scans) traces its exact outline. Download the
-          result as COCO or YOLO training data.
+          result as training data: COCO JSON, YOLO or QuPath GeoJSON.
         </p>
+        <AnnotateFaq />
       </header>
 
       {!available && (
