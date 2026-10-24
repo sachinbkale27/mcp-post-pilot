@@ -96,13 +96,15 @@ async def test_answers_only_carry_facts_quoted_from_labels_it_read(monkeypatch):
         assert reports["drug"] == "semaglutide" and reports["total"] == 73001
         assert data(await mcp.call_tool("recalls", {"name": "Ozempic"}))["items"] == []
 
+        # a quote filed under the wrong section of the label is moved to the right one
+        misfiled = {**quoted, "point": "Ozempic is for type 2 diabetes.", "section": "warnings", "quote": "improve glycemic control in adults with type 2 diabetes"}
         filed = await mcp.call_tool("submit_drug_info", {
-            "drug": "Ozempic", "summary_text": "Ozempic treats type 2 diabetes.", "facts": [quoted, invented],
+            "drug": "Ozempic", "summary_text": "Ozempic treats type 2 diabetes.", "facts": [quoted, invented, misfiled],
             "include_reports": True, "include_recalls": True,
         })
         assert not filed.is_error  # refused once already: the unsupported fact is left out
         out = data(filed)
-        assert [f["point"] for f in out["facts"]] == [quoted["point"]]
+        assert [(f["point"], f["section"]) for f in out["facts"]] == [(quoted["point"], "interactions"), (misfiled["point"], "uses")]
         report = out["result"]
         assert f"[DailyMed](https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid={SET_ID})" in report
         assert "73,001 adverse event reports mention semaglutide" in report and "| Nausea | 10,674 |" in report and "Off label" not in report
@@ -126,3 +128,8 @@ def test_drugs_endpoint_streams_the_agent(monkeypatch):
     with TestClient(main.app) as client:
         body = client.post("/drugs", json={"question": "What is metformin for?"}).text
     assert "event: drug_report" in body and "event: done" in body
+
+
+def test_a_refused_quote_gets_the_closest_label_sentence():
+    text = "7.1 Use with Insulin. Patients may be at increased risk of hypoglycemia. 7.2 Oral Medications."
+    assert drugs.closest_sentence("patients could have a higher risk of hypoglycaemia", text) == "Patients may be at increased risk of hypoglycemia."

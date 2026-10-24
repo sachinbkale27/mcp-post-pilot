@@ -17,6 +17,7 @@ An OPENFDA_API_KEY raises openFDA's limit from 1,000 requests a day per address.
 """
 
 import asyncio
+import difflib
 import os
 import re
 from typing import Annotated, Any, Literal
@@ -192,6 +193,14 @@ def passages(text: str, terms: list[str], limit: int = 2500) -> str:
         runs.append(sentences[i] if i == prev + 1 and runs else "\u2026 " + sentences[i])
         prev = i
     return " ".join(runs).removeprefix("\u2026 ")[:limit]
+
+
+def closest_sentence(quote: str, text: str) -> str:
+    """The label sentence most like a quote that wasn't found, so the agent can copy it exactly."""
+    sentences = [s for s in re.split(r"(?<=[.;•])\s+", text) if len(s) > 15]
+    words = set(re.findall(r"[a-z0-9]+", quote.lower()))
+    scored = [(len(words & set(re.findall(r"[a-z0-9]+", s.lower()))), difflib.SequenceMatcher(None, quote.lower(), s.lower()).quick_ratio(), s) for s in sentences]
+    return max(scored)[2][:300] if scored else ""
 
 
 # ---------------------------------------------------------------- report
@@ -420,7 +429,15 @@ def create_server() -> MCPServer:
             if f.set_id not in labels:
                 problems[i] = "its label was not read in this session; read it with read_label"
             elif not quote_found(f.quote, texts[f.set_id].get(f.section, "")):
-                problems[i] = f"its quote is not an exact quote (of 15+ characters) from the label's {f.section} section"
+                # The right words filed under another section of the same label: file them there
+                other = next((name for name, text in texts[f.set_id].items() if quote_found(f.quote, text)), None)
+                if other:
+                    f.section = other
+                else:
+                    near = closest_sentence(f.quote, "\n".join(texts[f.set_id].values()))
+                    problems[i] = "its quote is not in the label word for word (15+ characters)" + (
+                        f"; the closest label sentence is \u201c{near}\u201d" if near else ""
+                    )
         if problems and not refusals:
             refusals.append(problems)
             raise ToolError(
