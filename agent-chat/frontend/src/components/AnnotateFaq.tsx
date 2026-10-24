@@ -1,5 +1,8 @@
 import { Faq, type FaqItem } from "./Faq";
 
+const Need = () => <span className="faq-tag need">Required</span>;
+const Optional = () => <span className="faq-tag">Optional</span>;
+
 /** Short questions people ask before annotating their first image; each opens to a plain answer. */
 const FAQ: FaqItem[] = [
   {
@@ -11,8 +14,24 @@ const FAQ: FaqItem[] = [
     a: "You give it an image and say what to mark. The Image Annotation Agent finds each object and Segment Anything traces its exact outline. You can then download the outlines as training data, or open them in Image Label to edit.",
   },
   {
+    q: "Which fields must I fill in?",
+    a: (
+      <ul>
+        <li><strong>Image</strong> <Need /> Upload a file or paste an image URL, one or the other.</li>
+        <li><strong>What to label</strong> <Need /> Needed for Annotate; the histology tools and Diagnose work without it.</li>
+        <li><strong>Label names</strong> <Optional /> The names to use for the outlines.</li>
+        <li><strong>Image type</strong> <Optional /> Starts on "Photo or general image"; change it for medical scans.</li>
+      </ul>
+    ),
+  },
+  {
     q: "What should I write in \"What to label\"?",
-    a: "Say plainly what to outline, for example \"Outline every person and every car\" or \"Circle the tumour regions\". Label names are optional: they keep the names the same across many images, so a dataset stays consistent.",
+    a: (
+      <>
+        Say plainly what to outline, for example "Outline every person and every car" or "Circle the tumour regions".
+        <br /><strong>Label names</strong> <Optional /> keep the names the same across many images, so a dataset stays consistent.
+      </>
+    ),
   },
   {
     q: "Photo or medical scan?",
