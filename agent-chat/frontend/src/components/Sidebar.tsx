@@ -1,8 +1,8 @@
-import { BookText, Bot, FileCode2, FlaskConical, MessageSquarePlus, MessagesSquare, Network, PanelLeftClose, ScanSearch, SquareArrowOutUpRight } from "lucide-react";
+import { BookText, Bot, FileCode2, FlaskConical, MessageSquarePlus, MessagesSquare, Network, PanelLeftClose, Pill, ScanSearch, SquareArrowOutUpRight } from "lucide-react";
 import { BLOG_URL, type AgentInfo, type AgentsInfo } from "../api";
 import { toolMeta } from "../lib/tools";
 
-export type View = "chat" | "label" | "trials";
+export type View = "chat" | "label" | "trials" | "medicines";
 
 interface Props {
   info?: AgentsInfo;
@@ -12,6 +12,7 @@ interface Props {
   view: View;
   labelingAvailable: boolean;
   trialsAvailable: boolean;
+  medicinesAvailable: boolean;
   onViewChange: (view: View) => void;
   onNewChat: () => void;
   onRetry: () => void;
@@ -84,7 +85,7 @@ function AgentPanel({ agent, defaultOpen }: { agent: AgentInfo; defaultOpen: boo
   );
 }
 
-export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, trialsAvailable, onViewChange, onNewChat, onRetry, onClose }: Props) {
+export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, trialsAvailable, medicinesAvailable, onViewChange, onNewChat, onRetry, onClose }: Props) {
   const online = info?.agents.filter((a) => a.online).length ?? 0;
   const status = infoError ? "offline" : info ? (online === info.agents.length ? "online" : "partial") : "connecting";
 
@@ -113,6 +114,11 @@ export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, 
         {trialsAvailable && (
           <button className={view === "trials" ? "active" : undefined} onClick={() => onViewChange("trials")} aria-current={view === "trials" ? "page" : undefined}>
             <FlaskConical size={16} aria-hidden /> Clinical Trials
+          </button>
+        )}
+        {medicinesAvailable && (
+          <button className={view === "medicines" ? "active" : undefined} onClick={() => onViewChange("medicines")} aria-current={view === "medicines" ? "page" : undefined}>
+            <Pill size={16} aria-hidden /> Medicines
           </button>
         )}
       </nav>

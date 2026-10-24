@@ -748,3 +748,8 @@ a.label-download { text-decoration: none; }
 .ask-ai:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgb(124 58 237 / 0.45); }
 .ask-ai:focus-visible { outline: 3px solid color-mix(in srgb, #7c3aed 50%, transparent); outline-offset: 2px; }
 .ask-ai:disabled { opacity: 0.85; cursor: progress; transform: none; }
+
+/* ---- medicines ---- */
+.medicine-steps { margin: 4px 0 0; padding-left: 20px; color: var(--text-2); font-size: 14px; line-height: 1.6; }
+.medicine-steps li + li { margin-top: 6px; }
+.medicine-steps strong { color: var(--text); }

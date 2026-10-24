@@ -17,7 +17,9 @@ from .image_url import ImageUrlError, download_image
 from .labeling import LabelingUnavailable, run_labeling, warm_up
 from .pathology import run_pathology
 from .handoff import HandoffError, ResultsHandoff, hand_off
+from .drugs_search import run_drugs
 from .trials_search import TrialsUnavailable, run_trials
+from .view_agents import AgentUnavailable
 from .origin import OriginSecretMiddleware
 
 app = FastAPI(title="MCP Agent Chat")
@@ -87,6 +89,10 @@ class PathologyRequest(BaseModel):
 class TrialsRequest(BaseModel):
     question: str = Field(min_length=5, max_length=1500)  # the search, in words (the view builds it from its form)
     person: str = Field(default="", max_length=1500)  # what is known about the person, for the eligibility screen
+
+
+class DrugsRequest(BaseModel):
+    question: str = Field(min_length=5, max_length=1500)  # the question, in words (the view builds it from its form)
 
 
 class ImageUrlRequest(BaseModel):
@@ -216,6 +222,20 @@ async def trials(req: TrialsRequest) -> AsyncIterable[ServerSentEvent]:
         async for event in run_trials(req.question.strip(), req.person.strip()):
             yield _sse(event)
     except TrialsUnavailable as exc:
+        yield _sse({"type": "error", "message": str(exc)})
+    except Exception as exc:
+        yield _sse({"type": "error", "message": _error_message(exc)})
+    yield _sse({"type": "done"})
+
+
+@app.post("/drugs", response_class=EventSourceResponse)
+async def drugs(req: DrugsRequest) -> AsyncIterable[ServerSentEvent]:
+    """Run the Drug Information agent on one question and stream its progress; a final drug_report event has
+    its answer."""
+    try:
+        async for event in run_drugs(req.question.strip()):
+            yield _sse(event)
+    except AgentUnavailable as exc:
         yield _sse({"type": "error", "message": str(exc)})
     except Exception as exc:
         yield _sse({"type": "error", "message": _error_message(exc)})

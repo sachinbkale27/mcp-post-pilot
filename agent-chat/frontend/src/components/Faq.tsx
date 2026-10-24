@@ -3,6 +3,10 @@ import { ChevronRight, MessageCircleQuestion } from "lucide-react";
 
 export type FaqItem = { q: string; a: ReactNode };
 
+/** Tags for answers that list a form's fields. */
+export const Need = () => <span className="faq-tag need">Required</span>;
+export const Optional = () => <span className="faq-tag">Optional</span>;
+
 /** A collapsed list of short questions at the top of a page; each opens to a plain answer. */
 export function Faq({ title, items }: { title: string; items: FaqItem[] }) {
   return (

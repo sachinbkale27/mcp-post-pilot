@@ -44,5 +44,13 @@
     "mcp_url": "${TRIALS_MCP_URL:-local:trials}",
     "prompt_file": "prompts/trials.md",
     "report_tool": "submit_trials"
+  },
+  {
+    "name": "drugs",
+    "title": "Drug Information agent",
+    "description": "Explains medicines in plain language from official FDA drug labels: what a drug is for, how it is taken, side effects, warnings, who should not take it, interactions with other medicines or alcohol, pregnancy and breastfeeding, plus FDA adverse event reports and recalls. Resolves brand and generic names. Every point quotes the label. It gives information, never personal medical advice or doses for a person. Give it the medicine's name and what the user wants to know.",
+    "mcp_url": "${DRUGS_MCP_URL:-local:drugs}",
+    "prompt_file": "prompts/drugs.md",
+    "report_tool": "submit_drug_info"
   }
 ]

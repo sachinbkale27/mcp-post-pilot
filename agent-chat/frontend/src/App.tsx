@@ -6,6 +6,7 @@ import { prepareImage } from "./lib/images";
 import { AgentTurn, UserMessage, type Turn } from "./components/Messages";
 import { applyEvent } from "./lib/events";
 import { LabelView } from "./components/LabelView";
+import { MedicinesView } from "./components/MedicinesView";
 import { TrialsView } from "./components/TrialsView";
 import { Brand, Sidebar, type View } from "./components/Sidebar";
 
@@ -58,9 +59,11 @@ const TRIAL_EXAMPLES = [
   },
 ];
 
-const HASHES: Record<string, View> = { "#annotate": "label", "#label": "label", "#trials": "trials" };
+const HASHES: Record<string, View> = { "#annotate": "label", "#label": "label", "#trials": "trials", "#medicines": "medicines" };
 
-/** #annotate (or the earlier #label) opens the annotation view, #trials the clinical trials search. */
+/** #annotate (or the earlier #label) opens the annotation view, #trials the clinical trials search, #medicines the drug information. */
+const VIEW_TITLES: Partial<Record<View, string>> = { label: "Annotate Images", trials: "Clinical Trials", medicines: "Medicines" };
+
 function viewFromHash(): View {
   return HASHES[location.hash] ?? "chat";
 }
@@ -83,6 +86,8 @@ export function App() {
   const [searchingTrials, setSearchingTrials] = useState(false);
   const [trialsPrefill, setTrialsPrefill] = useState<{ condition: string; key: number }>();
   const trialsAgent = info?.agents.find((a) => a.name === "trials");
+  const [lookingUpMedicine, setLookingUpMedicine] = useState(false);
+  const drugsAgent = info?.agents.find((a) => a.name === "drugs");
   const labelsAgent = info?.agents.find((a) => a.name === "labels");
 
   // #annotate opens the annotation view, so it can be linked to and survives a reload
@@ -94,7 +99,7 @@ export function App() {
   function openView(next: View) {
     setView(next);
     setSidebarOpen(false);
-    const hash = next === "label" ? "#annotate" : next === "trials" ? "#trials" : "";
+    const hash = next === "chat" ? "" : next === "label" ? "#annotate" : `#${next}`;
     history.replaceState(null, "", hash || location.pathname + location.search);
   }
 
@@ -106,7 +111,7 @@ export function App() {
 
   useEffect(() => {
     const first = turns[0] && (turns[0].user || "Images");
-    const title = view === "label" ? "Annotate Images" : view === "trials" ? "Clinical Trials" : first && first.slice(0, 40);
+    const title = VIEW_TITLES[view] ?? (first && first.slice(0, 40));
     document.title = title ? `${title} · Post Pilot Agent` : "Post Pilot Agent";
   }, [turns, view]);
 
@@ -188,6 +193,7 @@ export function App() {
         view={view}
         labelingAvailable={!!labelsAgent}
         trialsAvailable={!!trialsAgent}
+        medicinesAvailable={!!drugsAgent}
         onViewChange={openView}
         onNewChat={() => { newChat(); openView("chat"); }}
         onRetry={loadInfo}
@@ -202,7 +208,7 @@ export function App() {
           </button>
           <div className="only-mobile"><Brand /></div>
           <h1 className="topbar-title hide-mobile">
-            {view === "label" ? "Annotate Images" : view === "trials" ? "Clinical Trials" : turns[0] ? turns[0].user || "Images" : "New conversation"}
+            {VIEW_TITLES[view] ?? (turns[0] ? turns[0].user || "Images" : "New conversation")}
           </h1>
           {info && <span className="model-chip"><Sparkles size={13} aria-hidden /> {info.model}</span>}
         </header>
@@ -241,6 +247,19 @@ export function App() {
           />
         </div>
 
+        <div className="scroll" hidden={view !== "medicines"}>
+          <MedicinesView
+            available={!info || !!drugsAgent?.online}
+            unavailableReason={
+              !drugsAgent
+                ? "The Drug Information agent isn't configured on this server."
+                : `The Drug Information agent is offline${drugsAgent.error ? `: ${drugsAgent.error}` : "."}`
+            }
+            busy={lookingUpMedicine}
+            onBusyChange={setLookingUpMedicine}
+          />
+        </div>
+
         <div
           className="scroll"
           hidden={view !== "chat"}
@@ -262,7 +281,7 @@ export function App() {
                 publish posts), the Genetics agent researches ClinVar, gnomAD, NCBI Gene and PubMed
                 {info?.agents.some((a) => a.name === "labels") ? (
                   <>
-                    , and the Image Annotation Agent annotates your images in{" "}
+                    , the Image Annotation Agent annotates your images in{" "}
                     <a href="https://labels.sachin-kale.com" target="_blank" rel="noreferrer">Image Label</a> and exports
                     COCO or YOLO training data (try{" "}
                     <a href="#annotate" onClick={(e) => { e.preventDefault(); openView("label"); }}>Annotate Images</a>)
@@ -272,8 +291,14 @@ export function App() {
                   ? ", the Fact-check agent verifies claims and links against web sources"
                   : null}
                 {info?.agents.some((a) => a.name === "trials")
-                  ? ", and the Clinical Trials agent finds trials in the ClinicalTrials.gov registry"
+                  ? ", the Clinical Trials agent finds trials in the ClinicalTrials.gov registry"
                   : null}
+                {info?.agents.some((a) => a.name === "drugs") ? (
+                  <>
+                    , and the Drug Information agent explains medicines from their FDA labels (try{" "}
+                    <a href="#medicines" onClick={(e) => { e.preventDefault(); openView("medicines"); }}>Medicines</a>)
+                  </>
+                ) : null}
                 .
                 I hand each part of your request to the right agent, combine their results, and you see
                 every delegation and tool call as it happens.

@@ -1,7 +1,4 @@
-import { Faq, type FaqItem } from "./Faq";
-
-const Need = () => <span className="faq-tag need">Required</span>;
-const Optional = () => <span className="faq-tag">Optional</span>;
+import { Faq, type FaqItem, Need, Optional } from "./Faq";
 
 /** Short questions people ask before annotating their first image; each opens to a plain answer. */
 const FAQ: FaqItem[] = [

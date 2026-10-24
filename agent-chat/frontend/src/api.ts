@@ -61,6 +61,7 @@ export type AgentEvent =
   | { type: "normalized"; image_id: string; name: string; url: string }
   | { type: "diagnosis_regions"; medical: boolean; regions: DiagnosisRegion[]; diagnosis: string; lesion_area: string }
   | { type: "trials_report"; report: string }
+  | { type: "drug_report"; report: string }
   | { type: "error"; message: string }
   | { type: "done" };
 
@@ -202,6 +203,11 @@ export function streamLabel(
 /** Run the Clinical Trials agent on one search; the trials are in its submit_trials result. */
 export function streamTrials(request: { question: string; person: string }, signal: AbortSignal): AsyncGenerator<AgentEvent> {
   return streamEvents("/trials", request, signal);
+}
+
+/** Run the Drug Information agent on one question; its answer is the drug_report event. */
+export function streamDrugs(request: { question: string }, signal: AbortSignal): AsyncGenerator<AgentEvent> {
+  return streamEvents("/drugs", request, signal);
 }
 
 export const GENETICS_URL = import.meta.env.VITE_GENETICS_URL ?? "https://genetics.sachin-kale.com";
