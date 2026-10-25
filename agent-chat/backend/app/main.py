@@ -15,10 +15,9 @@ from .agent import list_agents, reset_thread, run_turn
 from .diagnose import run_diagnosis
 from .image_url import ImageUrlError, download_image
 from .labeling import LabelingUnavailable, run_labeling, warm_up
-from .pathology import run_pathology
+from .pathology import PathologyError, run_pathology
 from .handoff import HandoffError, ResultsHandoff, hand_off
 from .drugs_search import run_drugs
-from .pathology import PathologyError
 from .trials_search import TrialsUnavailable, run_trials
 from .view_agents import AgentUnavailable
 from .origin import OriginSecretMiddleware
