@@ -3,7 +3,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CircleAlert, CircleCheck, Shapes, Download, FlaskConical, PenTool, Sparkles, SquareArrowOutUpRight, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
 import {
-  BLOG_URL, GENETICS_URL, fetchImageFromUrl, handOffResults, streamDiagnosis, streamLabel, streamPathology, uploadImage, warmUpLabeling,
+  BLOG_URL, GENETICS_URL, fetchImageFromUrl, handOffResults, shareToImageLabel, streamDiagnosis, streamLabel, streamPathology, uploadImage, warmUpLabeling,
   type AgentEvent, type Annotation, type DiagnosisRegion, type LabelResult, type NucleiSummary, type PathologyAction, type QualityResult,
 } from "../api";
 import { applyEvent } from "../lib/events";
@@ -586,7 +586,31 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
 
 function LabelResultView({ result, image, name, onAskAI }: { result: LabelResult; image: string; name: string; onAskAI: () => Promise<void> }) {
   const [asking, setAsking] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState<string>();
   const nuclei = result.nuclei_summary;
+
+  /** Image Label in a new tab, opened at once (while the click still counts) and pointed at the link when ready. */
+  async function openInImageLabel() {
+    setOpenError(undefined);
+    setOpening(true);
+    const tab = window.open("", "_blank");
+    if (tab) {
+      tab.opener = null;
+      tab.document.title = "Image Label";
+      tab.document.body.innerHTML = '<p style="font:15px system-ui;margin:40vh auto;text-align:center;color:#475569">Opening your annotations in Image Label…</p>';
+    }
+    try {
+      const url = await shareToImageLabel(result.image_id);
+      if (tab) tab.location.href = url;
+      else window.open(url, "_blank");
+    } catch (e) {
+      tab?.close();
+      setOpenError((e as Error).message);
+    } finally {
+      setOpening(false);
+    }
+  }
   const exportable = result.annotations.filter((a) => a.type === "polygon" || a.type === "circle").length;
   const base = name.replace(/\.[^.]+$/, "") || "image";
   const hasNuclei = result.annotations.some((a) => layerOf(a) === "nuclei");
@@ -630,6 +654,40 @@ function LabelResultView({ result, image, name, onAskAI }: { result: LabelResult
         </p>
       )}
 
+      <section className="annotate-further" aria-labelledby="annotate-further-heading">
+        <h4 id="annotate-further-heading"><PenTool size={16} aria-hidden /> Edit these annotations further</h4>
+        <p>
+          Open this image with all {result.annotations.length.toLocaleString()} annotations in{" "}
+          <strong>Image Label</strong>: fix outlines, add labels, then save or export. It opens as your own copy;
+          no account needed.
+        </p>
+        <button className="open-image-label" onClick={openInImageLabel} disabled={opening || !result.image_id}>
+          {opening ? <LoaderCircle size={17} className="spin" aria-hidden /> : <SquareArrowOutUpRight size={17} aria-hidden />}
+          {opening ? "Opening Image Label…" : "Open in Image Label"}
+        </button>
+        {openError && <p className="panel-error">{openError}</p>}
+        <div className="annotate-further-downloads">
+          <span>Or download:</span>
+          <button className="label-download" onClick={() => downloadDataUrl(image, `${base}.${image.startsWith("data:image/png") ? "png" : "jpg"}`)}>
+            <Download size={14} aria-hidden /> Image
+          </button>
+          <button className="label-download" onClick={() => download(`${base}.coco.json`, JSON.stringify(result.exports.coco, null, 2), "application/json")} disabled={!exportable}>
+            <Download size={14} aria-hidden /> Annotations (COCO)
+          </button>
+          <button className="label-download" onClick={() => downloadFigure(base)} disabled={!result.annotations.length}>
+            <Download size={14} aria-hidden /> Annotated image (PNG)
+          </button>
+        </div>
+        <details className="annotate-further-how">
+          <summary>Annotating downloaded files</summary>
+          <ol>
+            <li>Download the <strong>image</strong> and its <strong>annotations (COCO)</strong>.</li>
+            <li>Open <a href="https://labels.sachin-kale.com/" target="_blank" rel="noreferrer">Image Label</a> and upload the image.</li>
+            <li>Press <strong>Import</strong> in its toolbar and choose the COCO file: the outlines appear, ready to edit, add to and export again.</li>
+          </ol>
+        </details>
+      </section>
+
       <div className="ask-ai-row">
         <span>Questions about these results?</span>
         <button
@@ -642,29 +700,6 @@ function LabelResultView({ result, image, name, onAskAI }: { result: LabelResult
           {asking ? "Opening…" : "Ask AI"} <SquareArrowOutUpRight size={13} aria-hidden />
         </button>
       </div>
-
-      <section className="annotate-further" aria-labelledby="annotate-further-heading">
-        <h4 id="annotate-further-heading"><PenTool size={15} aria-hidden /> Download and annotate further</h4>
-        <div className="label-downloads">
-          <button className="label-download" onClick={() => downloadDataUrl(image, `${base}.${image.startsWith("data:image/png") ? "png" : "jpg"}`)}>
-            <Download size={14} aria-hidden /> Image
-          </button>
-          <button className="label-download" onClick={() => download(`${base}.coco.json`, JSON.stringify(result.exports.coco, null, 2), "application/json")} disabled={!exportable}>
-            <Download size={14} aria-hidden /> Annotations (COCO)
-          </button>
-          <button className="label-download" onClick={() => downloadFigure(base)} disabled={!result.annotations.length}>
-            <Download size={14} aria-hidden /> Annotated image (PNG)
-          </button>
-          <a className="label-download primary" href="https://labels.sachin-kale.com/" target="_blank" rel="noreferrer">
-            <SquareArrowOutUpRight size={14} aria-hidden /> Open Image Label
-          </a>
-        </div>
-        <ol>
-          <li>Download the <strong>image</strong> and its <strong>annotations (COCO)</strong>.</li>
-          <li>Open <a href="https://labels.sachin-kale.com/" target="_blank" rel="noreferrer">Image Label</a> and upload the image.</li>
-          <li>Press <strong>Import</strong> in its toolbar and choose the COCO file: the outlines appear, ready to edit, add to and export again.</li>
-        </ol>
-      </section>
 
       <h4 className="label-downloads-title">Training data</h4>
       <div className="label-downloads">

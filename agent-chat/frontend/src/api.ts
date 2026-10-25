@@ -249,6 +249,19 @@ export async function handOffResults(results: ResultsHandoff): Promise<string> {
   return body.url;
 }
 
+/** A link that opens the image and its saved annotations in Image Label (labels.sachin-kale.com), as the
+ * visitor's own copy to edit, save and export. */
+export async function shareToImageLabel(imageId: string): Promise<string> {
+  const res = await fetch(`${API_URL}/label/share`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image_id: imageId }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : `Could not open Image Label (${res.status})`);
+  return body.url;
+}
+
 /** Run one histopathology tool (StarDist nuclei, quality check, stain normalization) on an image. */
 export function streamPathology(
   request: { image: ChatImage; action: PathologyAction; image_id?: string },

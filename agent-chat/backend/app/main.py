@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 from .agent import list_agents, reset_thread, run_turn
 from .diagnose import run_diagnosis
 from .image_url import ImageUrlError, download_image
-from .labeling import LabelingUnavailable, run_labeling, warm_up
+from .labeling import LabelingUnavailable, run_labeling, share_link, warm_up
 from .pathology import PathologyError, run_pathology
 from .handoff import HandoffError, ResultsHandoff, hand_off
 from .drugs_search import run_drugs
@@ -141,6 +141,10 @@ async def chat(req: ChatRequest) -> AsyncIterable[ServerSentEvent]:
     yield _sse({"type": "done"})
 
 
+class ShareRequest(BaseModel):
+    image_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+
+
 class WarmupRequest(BaseModel):
     model: Literal["sam", "medsam"] = "sam"
 
@@ -159,6 +163,15 @@ async def diagnose(req: DiagnoseRequest) -> AsyncIterable[ServerSentEvent]:
     except Exception as exc:
         yield _sse({"type": "error", "message": _error_message(exc)})
     yield _sse({"type": "done"})
+
+
+@app.post("/label/share")
+async def label_share(req: ShareRequest):
+    """A link that opens the image and its annotations in Image Label, where anyone can edit them further."""
+    try:
+        return {"url": await share_link(req.image_id)}
+    except LabelingUnavailable as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/label/warmup")

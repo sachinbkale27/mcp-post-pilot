@@ -79,6 +79,16 @@ async def warm_up(model: str = "sam") -> bool:
         return False
 
 
+async def share_link(image_id: str) -> str:
+    """A 7-day link that opens the image and its saved annotations in the Image Label app, in anyone's browser."""
+    spec = labeling_agent()
+    async with connect(spec) as mcp:
+        content, is_error = await call_mcp_tool(mcp, "share_image", {"image_id": image_id})
+    if is_error:
+        raise LabelingUnavailable(f"The image couldn't be shared: {content}"[:300])
+    return _decode(content)["url"]
+
+
 def _decode(content: str) -> Any:
     try:
         value = json.loads(content)

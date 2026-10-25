@@ -721,13 +721,27 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 .label-canvas:has(.annotated-figure) { justify-self: stretch; overflow: visible; background: none; }
 
 /* ---- download and annotate further ---- */
-.annotate-further { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); }
-.annotate-further h4, .label-downloads-title {
-  display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--text-3);
-  font: 600 11px/1.2 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase;
+.annotate-further {
+  margin-top: 14px; padding: 16px 18px; border: 2px solid var(--accent); border-radius: 14px;
+  background: linear-gradient(135deg, var(--accent-soft), var(--bg-2));
 }
-.label-downloads-title { margin-top: 14px; }
-.annotate-further ol { margin: 10px 0 0; padding-left: 20px; color: var(--text-2); font-size: 13px; line-height: 1.6; }
+.annotate-further h4 { margin: 0 0 6px; display: flex; align-items: center; gap: 8px; font-size: 16px; color: var(--text); }
+.annotate-further > p { margin: 0 0 12px; color: var(--text-2); font-size: 14px; line-height: 1.5; }
+.open-image-label {
+  display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border: none; border-radius: 10px;
+  background: var(--accent); color: #fff; font: 600 15px var(--font-ui); cursor: pointer;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3);
+}
+.open-image-label:hover:not(:disabled) { filter: brightness(1.08); }
+.open-image-label:disabled { opacity: 0.7; cursor: default; }
+.annotate-further-downloads { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 14px; }
+.annotate-further-downloads > span { color: var(--text-3); font-size: 13px; margin-right: 2px; }
+.annotate-further-how { margin-top: 10px; }
+.annotate-further-how summary { cursor: pointer; color: var(--text-3); font-size: 12.5px; }
+.label-downloads-title {
+  margin: 16px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3);
+}
+.annotate-further ol { margin: 8px 0 0; padding-left: 20px; color: var(--text-2); font-size: 13px; line-height: 1.6; }
 .annotate-further ol a { color: var(--accent); font-weight: 600; }
 a.label-download { text-decoration: none; }
 .label-download.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }

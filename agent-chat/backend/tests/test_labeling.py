@@ -166,3 +166,21 @@ async def test_cell_types_start_the_job_and_wait_for_it(monkeypatch):
     assert calls[0] == "classify_cells" and "upload_image_from_url" not in calls
     result = next(e for e in events if e["type"] == "label_result")
     assert result["cell_types"]["counts"]["tumour cell"] == 3 and "nuclei_summary" not in result
+
+
+async def test_share_link_asks_the_label_server(monkeypatch):
+    calls = []
+
+    @asynccontextmanager
+    async def fake_connect(spec):
+        yield object()
+
+    async def fake_call(mcp, name, arguments):
+        calls.append((name, arguments))
+        return json.dumps({"imageId": "img-1", "url": "https://labels.example/?shared=abc"}), False
+
+    monkeypatch.setattr(labeling, "load_agents", lambda: (LABELS,))
+    monkeypatch.setattr(labeling, "connect", fake_connect)
+    monkeypatch.setattr(labeling, "call_mcp_tool", fake_call)
+    assert await labeling.share_link("img-1") == "https://labels.example/?shared=abc"
+    assert calls == [("share_image", {"image_id": "img-1"})]

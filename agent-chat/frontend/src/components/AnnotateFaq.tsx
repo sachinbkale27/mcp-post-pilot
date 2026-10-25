@@ -84,7 +84,7 @@ const FAQ: FaqItem[] = [
   },
   {
     q: "An outline is wrong. Can I fix it?",
-    a: "Yes. Download the image and the COCO annotations, open Image Label, upload the image, and press Import: the outlines appear, ready to edit and export again. Dashed outlines scored low, so check those first.",
+    a: "Yes. Press Open in Image Label under the result: the image opens there with all its annotations, as your own copy to edit, save and export, with no account needed. Dashed outlines scored low, so check those first.",
   },
   {
     q: "How long does it take?",
