@@ -2,7 +2,8 @@
 
 CloudFront adds the visitor's city, region, country and time zone to each request (CloudFront-Viewer-*). The
 visitor id is a hash of their address and browser with a secret and the date: it counts distinct visitors per
-day, can't be reversed to an address, and changes daily. Nothing is stored here; no cookie is set.
+day, can't be reversed to an address, and changes daily. Nothing is stored here; the only cookie read is the
+owner's "internal" mark.
 """
 
 import datetime
@@ -16,9 +17,11 @@ VIEWER: ContextVar[dict[str, str]] = ContextVar("viewer", default={})
 
 def viewer_headers(headers: dict[str, str]) -> dict[str, str]:
     """The x-viewer-* headers for this request, or none when it didn't come through CloudFront."""
+    # The owner's own browsers (set with ?internal=1 on the site): left out of the usage counts
+    internal = {"x-viewer-internal": "1"} if "internal=1" in headers.get("cookie", "").replace(" ", "").split(";") else {}
     country = headers.get("cloudfront-viewer-country", "")
     if not country:
-        return {}
+        return internal
     address = headers.get("cloudfront-viewer-address", "").rsplit(":", 1)[0]  # "ip:port"
     day = datetime.date.today().isoformat()
     seed = f"{os.getenv('ORIGIN_SECRET', '')}|{day}|{address}|{headers.get('user-agent', '')}"
@@ -29,7 +32,7 @@ def viewer_headers(headers: dict[str, str]) -> dict[str, str]:
         "x-viewer-city": headers.get("cloudfront-viewer-city", ""),
         "x-viewer-time-zone": headers.get("cloudfront-viewer-time-zone", ""),
     }
-    return {key: quote(value[:100], safe=" /_-") for key, value in values.items() if value}
+    return {key: quote(value[:100], safe=" /_-") for key, value in values.items() if value} | internal
 
 
 class ViewerMiddleware:

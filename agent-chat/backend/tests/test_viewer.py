@@ -21,3 +21,10 @@ def test_visitor_place_from_cloudfront():
 
 def test_no_place_without_cloudfront():
     assert viewer_headers({"user-agent": "Mozilla/5.0"}) == {}
+
+
+def test_the_owners_browser_is_marked_internal():
+    cloudfront = {"cloudfront-viewer-country": "US", "cloudfront-viewer-address": "203.0.113.7:1", "user-agent": "x"}
+    assert viewer_headers({**cloudfront, "cookie": "a=b; internal=1"})["x-viewer-internal"] == "1"
+    assert viewer_headers({"cookie": "internal=1"}) == {"x-viewer-internal": "1"}  # even without CloudFront
+    assert "x-viewer-internal" not in viewer_headers({**cloudfront, "cookie": "internal=0; notinternal=1"})
