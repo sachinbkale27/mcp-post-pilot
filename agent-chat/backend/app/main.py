@@ -18,6 +18,7 @@ from .labeling import LabelingUnavailable, run_labeling, warm_up
 from .pathology import run_pathology
 from .handoff import HandoffError, ResultsHandoff, hand_off
 from .drugs_search import run_drugs
+from .pathology import PathologyError
 from .trials_search import TrialsUnavailable, run_trials
 from .view_agents import AgentUnavailable
 from .origin import OriginSecretMiddleware
@@ -252,6 +253,8 @@ def _error_message(exc: BaseException) -> str:
     # The MCP client runs inside an anyio TaskGroup, which wraps errors in ExceptionGroups.
     while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
         exc = exc.exceptions[0]
+    if isinstance(exc, PathologyError):
+        return str(exc)
     if isinstance(exc, openai.AuthenticationError):
         return "OpenAI authentication failed - set OPENAI_API_KEY in agent-chat/.env."
     if isinstance(exc, openai.RateLimitError):

@@ -19,6 +19,10 @@ from typing import Any
 from .labeling import _decode, labeling_agent
 from .specialists.runner import call_mcp_tool, connect
 
+class PathologyError(RuntimeError):
+    """A message meant for the user as it is (e.g. the label server's reason a tool can't run)."""
+
+
 TITLES = {"nuclei": "Detect nuclei", "quality": "Check image quality", "normalize": "Normalize stain", "cells": "Find cell types"}
 CELLS_POLL_SECONDS = 5
 CELLS_LIMIT_SECONDS = 360
@@ -73,7 +77,7 @@ async def run_pathology(
                         await asyncio.sleep(CELLS_POLL_SECONDS)
                         waited += CELLS_POLL_SECONDS
                     if cells.get("status") != "done":
-                        raise RuntimeError(cells.get("error") or "Finding cell types took too long. Try again in a minute.")
+                        raise PathologyError(cells.get("error") or "Finding cell types took too long. Try again in a minute.")
                     await emit_result(mcp, target, cell_types=cells)
                 else:
                     found = await tool(mcp, "detect_nuclei", {"image_id": target})
