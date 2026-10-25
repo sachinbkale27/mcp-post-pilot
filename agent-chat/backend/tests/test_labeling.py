@@ -139,3 +139,30 @@ async def test_annotating_an_image_already_in_image_label_adds_to_it(label_serve
     task = next(t for name, t in label_server if name == "agent")
     assert "keep them, and only add new ones" in task
     assert next(e for e in events if e["type"] == "label_result")["image_id"] == "img-1"
+
+
+async def test_cell_types_start_the_job_and_wait_for_it(monkeypatch):
+    calls, polls = [], iter([{"status": "running"}, {"status": "done", "counts": {"tumour cell": 3}, "percent": {"tumour cell": 100.0}}])
+
+    @asynccontextmanager
+    async def fake_connect(spec):
+        yield object()
+
+    async def fake_call(mcp, name, arguments):
+        calls.append(name)
+        if name == "get_image" and len([c for c in calls if c == "get_image"]) <= 2:
+            return json.dumps({"imageId": "img-1", "cellTypes": next(polls)}), False
+        if name == "get_image":
+            return json.dumps({"imageId": "img-1", "width": 200, "height": 100, "annotations": SAVED}), False
+        if name == "export_annotations":
+            return json.dumps(EXPORTS.get(arguments["format"])), False
+        return json.dumps({"imageId": "img-1", "status": "queued"}), False
+
+    monkeypatch.setattr(labeling, "load_agents", lambda: (LABELS,))
+    monkeypatch.setattr(pathology, "connect", fake_connect)
+    monkeypatch.setattr(pathology, "call_mcp_tool", fake_call)
+    monkeypatch.setattr(pathology, "CELLS_POLL_SECONDS", 0)
+    events = [e async for e in pathology.run_pathology(IMAGE, "cells", image_id="0" * 36)]
+    assert calls[0] == "classify_cells" and "upload_image_from_url" not in calls
+    result = next(e for e in events if e["type"] == "label_result")
+    assert result["cell_types"]["counts"]["tumour cell"] == 3 and "nuclei_summary" not in result

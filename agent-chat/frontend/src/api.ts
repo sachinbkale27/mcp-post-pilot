@@ -121,6 +121,16 @@ export interface LabelResult {
   report: string;
   exports: { coco: unknown; yolo: { classes: string[]; annotations: string }; qupath?: unknown };
   nuclei_summary?: NucleiSummary; // when the result came from detect_nuclei
+  cell_types?: CellTypes; // when the result came from classify_cells
+}
+
+/** classify_cells' result (HoVer-Net, PanNuke weights: research and education only). */
+export interface CellTypes {
+  classified: number;
+  counts: Record<string, number>;
+  percent: Record<string, number>;
+  immune_to_tumour: number | null;
+  note: string;
 }
 
 /** detect_nuclei's measurements (StarDist). */
@@ -140,7 +150,7 @@ export interface QualityResult {
   metrics: Record<string, number>;
 }
 
-export type PathologyAction = "nuclei" | "quality" | "normalize";
+export type PathologyAction = "nuclei" | "quality" | "normalize" | "cells";
 
 /** One specialist agent and what its MCP server advertises. */
 export interface AgentInfo {

@@ -81,7 +81,7 @@ class LabelRequest(BaseModel):
 
 class PathologyRequest(BaseModel):
     image: ChatImage
-    action: Literal["nuclei", "quality", "normalize"]
+    action: Literal["nuclei", "quality", "normalize", "cells"]
     image_id: str | None = Field(default=None, pattern=r"^[0-9a-f-]{36}$")  # already in Image Label: don't upload again
     category: str = Field(default="agent-chat", max_length=60)
 

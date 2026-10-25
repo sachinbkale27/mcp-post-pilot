@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CircleAlert, CircleCheck, Download, FlaskConical, PenTool, Sparkles, SquareArrowOutUpRight, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
+import { CircleAlert, CircleCheck, Shapes, Download, FlaskConical, PenTool, Sparkles, SquareArrowOutUpRight, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
 import {
   BLOG_URL, GENETICS_URL, fetchImageFromUrl, handOffResults, streamDiagnosis, streamLabel, streamPathology, uploadImage, warmUpLabeling,
   type AgentEvent, type Annotation, type DiagnosisRegion, type LabelResult, type NucleiSummary, type PathologyAction, type QualityResult,
@@ -39,6 +39,7 @@ const PROGRESS: Record<PathologyAction, string> = {
   nuclei: "Finding nuclei with StarDist…",
   quality: "Checking image quality…",
   normalize: "Normalizing the stain colours…",
+  cells: "Classifying each nucleus as tumour, immune, connective tissue, dead or normal epithelial…",
 };
 
 interface Diagnosis {
@@ -199,7 +200,8 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
       const request = { image: { url: upload.url, data_url: upload.preview, name: upload.name }, action, image_id: labelImageId };
       for await (const event of streamPathology(request, controller.signal)) {
         if (event.type === "label_result") {
-          update((r) => ({ ...r, result: event }));
+          // Cell types relabel the nuclei found before: keep showing their measurements
+          update((r) => ({ ...r, result: { ...event, nuclei_summary: event.nuclei_summary ?? (event.cell_types ? lastNuclei : undefined) } }));
           if (event.nuclei_summary) setLastNuclei(event.nuclei_summary);
         } else if (event.type === "quality_result") {
           update((r) => ({ ...r, quality: event }));
@@ -464,6 +466,10 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
                 title="Find and outline every cell nucleus automatically (StarDist)">
                 <ScanSearch size={15} aria-hidden /> Detect nuclei
               </button>
+              <button className="label-secondary" onClick={() => runTool("cells")} disabled={busy || !lastNuclei || !labelImageId || !available}
+                title={lastNuclei ? "Classify the nuclei as tumour, immune, connective tissue, dead or normal epithelial cells (HoVer-Net; research and education only)" : "Detect nuclei first"}>
+                <Shapes size={15} aria-hidden /> Cell types
+              </button>
               <button className="label-secondary" onClick={() => runTool("normalize")} disabled={busy || upload?.status !== "ready" || !available}
                 title="Standardise the pink and purple stain colours (Macenko); saved as a new image">
                 <Palette size={15} aria-hidden /> Normalize stain
@@ -519,7 +525,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
             <p className="label-progress">
               <LoaderCircle size={15} className="spin" aria-hidden />
               {run.action ? PROGRESS[run.action] : diagnosis ? "Outlining the problematic regions on the image…" : "Annotating the image…"}
-              <span>{run.action ? "a few seconds, up to a minute if the model is starting" : "usually 20 to 40 seconds"}</span>
+              <span>{run.action === "cells" ? "usually 30 to 90 seconds" : run.action ? "a few seconds, up to a minute if the model is starting" : "usually 20 to 40 seconds"}</span>
             </p>
           )}
           {run?.error && <p className="label-alert"><CircleAlert size={16} aria-hidden /> {run.error}</p>}
@@ -599,6 +605,17 @@ function LabelResultView({ result, image, name, onAskAI }: { result: LabelResult
             size variation {nuclei.area_variation}
           </span>{" "}
           · {nuclei.enlarged} enlarged (over 2.5× the median area)
+        </p>
+      )}
+      {result.cell_types && (
+        <p className="nuclei-summary cell-types-summary">
+          <strong>Cell types</strong>{" "}
+          {Object.entries(result.cell_types.percent).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+            .map(([k, v]) => `${v}% ${k.replace(/ cell$/, "")}`).join(" · ")}
+          {result.cell_types.immune_to_tumour !== null && (
+            <> · <span title="Immune cells per tumour cell: a rough measure of how much the immune system has moved into the tumour">immune-to-tumour ratio {result.cell_types.immune_to_tumour}</span></>
+          )}
+          <span className="cell-types-note">{result.cell_types.note} Model estimates, not a diagnosis.</span>
         </p>
       )}
       {result.annotations.length === 0 ? (

@@ -5,6 +5,8 @@ server's MCP tools directly (uploading the image first unless it is already in I
 calls in the chat's event format:
 
   nuclei     detect_nuclei, then get_image and the exports -> label_result (with nuclei_summary)
+  cells      classify_cells on the nuclei already found (a background job on the label server, checked with
+             get_image until it ends), then get_image and the exports -> label_result (with cell_types)
   quality    check_image_quality -> quality_result
   normalize  normalize_stain -> normalized (the new image's id and a viewing URL)
 """
@@ -17,7 +19,9 @@ from typing import Any
 from .labeling import _decode, labeling_agent
 from .specialists.runner import call_mcp_tool, connect
 
-TITLES = {"nuclei": "Detect nuclei", "quality": "Check image quality", "normalize": "Normalize stain"}
+TITLES = {"nuclei": "Detect nuclei", "quality": "Check image quality", "normalize": "Normalize stain", "cells": "Find cell types"}
+CELLS_POLL_SECONDS = 5
+CELLS_LIMIT_SECONDS = 360
 
 
 async def run_pathology(
@@ -57,27 +61,45 @@ async def run_pathology(
                     done = await tool(mcp, "normalize_stain", {"image_id": target})
                     copy = await tool(mcp, "get_image", {"image_id": done["normalized"]["imageId"]})
                     emit({"type": "normalized", "image_id": copy["imageId"], "name": copy.get("filename"), "url": copy.get("url")})
+                elif action == "cells":
+                    await tool(mcp, "classify_cells", {"image_id": target, "wait_seconds": 0})
+                    waited = 0
+                    while True:
+                        # Quiet checks: one call each, not shown as steps
+                        content, is_error = await call_mcp_tool(mcp, "get_image", {"image_id": target})
+                        cells = (_decode(content) or {}).get("cellTypes") or {} if not is_error else {}
+                        if cells.get("status") in ("done", "failed") or waited >= CELLS_LIMIT_SECONDS:
+                            break
+                        await asyncio.sleep(CELLS_POLL_SECONDS)
+                        waited += CELLS_POLL_SECONDS
+                    if cells.get("status") != "done":
+                        raise RuntimeError(cells.get("error") or "Finding cell types took too long. Try again in a minute.")
+                    await emit_result(mcp, target, cell_types=cells)
                 else:
                     found = await tool(mcp, "detect_nuclei", {"image_id": target})
-                    saved = await tool(mcp, "get_image", {"image_id": target})
-                    coco, yolo, qupath = await asyncio.gather(
-                        *(tool(mcp, "export_annotations", {"image_id": target, "format": f}) for f in ("coco", "yolo", "qupath"))
-                    )
-                    emit({
-                        "type": "label_result",
-                        "image_id": target,
-                        "width": saved.get("width"),
-                        "height": saved.get("height"),
-                        "annotations": saved.get("annotations") or [],
-                        "report": "",
-                        "exports": {"coco": coco, "yolo": yolo, "qupath": qupath},
-                        "nuclei_summary": found.get("summary"),
-                    })
+                    await emit_result(mcp, target, nuclei_summary=found.get("summary"))
         except Exception:
             is_error = True
             raise
         finally:
             emit({"type": "agent_end", "id": delegation, "agent": spec.name, "is_error": is_error})
+
+    async def emit_result(mcp, target: str, **extra: Any) -> None:
+        """The image's saved annotations and their exports, as the view shows them."""
+        saved = await tool(mcp, "get_image", {"image_id": target})
+        coco, yolo, qupath = await asyncio.gather(
+            *(tool(mcp, "export_annotations", {"image_id": target, "format": f}) for f in ("coco", "yolo", "qupath"))
+        )
+        emit({
+            "type": "label_result",
+            "image_id": target,
+            "width": saved.get("width"),
+            "height": saved.get("height"),
+            "annotations": saved.get("annotations") or [],
+            "report": "",
+            "exports": {"coco": coco, "yolo": yolo, "qupath": qupath},
+            **extra,
+        })
 
     async def run() -> None:
         try:
