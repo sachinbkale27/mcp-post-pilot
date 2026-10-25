@@ -467,7 +467,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
                 <ScanSearch size={15} aria-hidden /> Detect nuclei
               </button>
               <button className="label-secondary" onClick={() => runTool("cells")} disabled={busy || !lastNuclei || !labelImageId || !available}
-                title={lastNuclei ? "Classify the nuclei as tumour, immune, connective tissue, dead or normal epithelial cells (HoVer-Net; research and education only)" : "Detect nuclei first"}>
+                title={lastNuclei ? "Classify the nuclei as tumour, immune, connective tissue, dead or normal epithelial cells (HoVer-Net; needs a 20x or 40x image; research and education only)" : "Detect nuclei first"}>
                 <Shapes size={15} aria-hidden /> Cell types
               </button>
               <button className="label-secondary" onClick={() => runTool("normalize")} disabled={busy || upload?.status !== "ready" || !available}
@@ -615,6 +615,7 @@ function LabelResultView({ result, image, name, onAskAI }: { result: LabelResult
           {result.cell_types.immune_to_tumour !== null && (
             <> · <span title="Immune cells per tumour cell: a rough measure of how much the immune system has moved into the tumour">immune-to-tumour ratio {result.cell_types.immune_to_tumour}</span></>
           )}
+          {result.cell_types.warning && <span className="cell-types-note cell-types-warning">{result.cell_types.warning}</span>}
           <span className="cell-types-note">{result.cell_types.note} Model estimates, not a diagnosis.</span>
         </p>
       )}

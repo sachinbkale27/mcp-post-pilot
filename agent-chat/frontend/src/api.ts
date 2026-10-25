@@ -131,6 +131,7 @@ export interface CellTypes {
   percent: Record<string, number>;
   immune_to_tumour: number | null;
   note: string;
+  warning?: string; // the image was coarser than the model expects
 }
 
 /** detect_nuclei's measurements (StarDist). */

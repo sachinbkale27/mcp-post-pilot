@@ -51,7 +51,9 @@ const FAQ: FaqItem[] = [
         After <strong>Detect nuclei</strong>, <strong>Cell types</strong> sorts each nucleus into one of five groups
         (HoVer-Net, a model trained on 19 tissues): <strong>tumour</strong>, <strong>immune</strong> (mostly
         lymphocytes), <strong>connective tissue</strong>, <strong>dead</strong> and <strong>normal epithelial</strong>.
-        The immune-to-tumour ratio is a rough sign of how much the immune system has moved into a tumour. These are
+        It needs a sharp, high-magnification image (20x or 40x): lower-resolution images are refused, because enlarging
+        them can't add the detail the model reads. The immune-to-tumour ratio is a rough sign of how much the immune
+        system has moved into a tumour. These are
         model estimates for research and education, not a diagnosis, and the model's licence doesn't allow
         commercial use.
       </>

@@ -16,6 +16,15 @@ import type { Annotation } from "../api";
 
 export type Layer = "interpretation" | "findings" | "nuclei";
 
+// Nuclei typed by Cell types (the label server's classify_cells) keep that tool's colours
+const CELL_TYPE_COLORS: Record<string, string> = {
+  "tumour cell": "#ff1744",
+  "immune cell": "#2979ff",
+  "connective tissue cell": "#00c853",
+  "dead cell": "#9e9e9e",
+  "normal epithelial cell": "#ffab00",
+};
+
 const LAYERS: { id: Layer; title: string }[] = [
   { id: "interpretation", title: "AI interpretation" },
   { id: "findings", title: "Findings" },
@@ -59,7 +68,7 @@ export function organize(annotations: Annotation[]): LabelEntry[] {
       count,
       color:
         layer === "interpretation" ? INTERPRETATION_COLOR
-        : layer === "nuclei" ? (/enlarged/i.test(label) ? ENLARGED_COLOR : NUCLEUS_COLOR)
+        : layer === "nuclei" ? (CELL_TYPE_COLORS[label] ?? (/enlarged/i.test(label) ? ENLARGED_COLOR : NUCLEUS_COLOR))
         : PALETTE[findings++ % PALETTE.length],
     }));
 }

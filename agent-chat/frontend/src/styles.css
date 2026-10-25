@@ -755,3 +755,4 @@ a.label-download { text-decoration: none; }
 .medicine-steps strong { color: var(--text); }
 
 .cell-types-note { display: block; margin-top: 4px; color: var(--text-3); font-size: 12px; }
+.cell-types-warning { color: var(--warn, #b45309); font-weight: 500; }
