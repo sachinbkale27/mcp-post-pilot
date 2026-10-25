@@ -27,6 +27,7 @@
       "user-agent": "post-pilot-agent-chat/1.0"
     },
     "prompt_file": "prompts/labels.md",
+    "forward_viewer": true,
     "images": true,
     "attachment_base_url": "${BLOG_PUBLIC_URL:-https://blog.sachin-kale.com}"
   },

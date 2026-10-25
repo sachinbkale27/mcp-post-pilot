@@ -21,6 +21,7 @@ from .drugs_search import run_drugs
 from .trials_search import TrialsUnavailable, run_trials
 from .view_agents import AgentUnavailable
 from .origin import OriginSecretMiddleware
+from .viewer import ViewerMiddleware
 
 app = FastAPI(title="MCP Agent Chat")
 app.add_middleware(
@@ -33,6 +34,7 @@ app.add_middleware(
 # On AWS only CloudFront knows this secret; direct calls to the Lambda URL are rejected.
 if secret := os.getenv("ORIGIN_SECRET"):
     app.add_middleware(OriginSecretMiddleware, secret=secret)
+app.add_middleware(ViewerMiddleware)  # the visitor's place, for Image Label's usage counts
 
 
 MAX_IMAGE_DATA_URL = 2_800_000  # ~2 MB image; the UI resizes before sending

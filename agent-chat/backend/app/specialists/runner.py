@@ -24,6 +24,7 @@ from mcp.client.streamable_http import create_mcp_http_client, streamable_http_c
 from mcp_types import Tool as MCPTool
 
 from ..local_mcp import local_server
+from ..viewer import VIEWER
 from . import AgentSpec
 
 Emit = Callable[[dict[str, Any]], None]
@@ -48,7 +49,8 @@ async def connect(spec: AgentSpec):
         async with Client(spec.mcp_url) as client:
             yield client
         return
-    async with create_mcp_http_client(headers=spec.headers) as http:
+    headers = spec.headers | (VIEWER.get() if spec.forward_viewer else {})
+    async with create_mcp_http_client(headers=headers) as http:
         async with Client(streamable_http_client(spec.mcp_url, http_client=http)) as client:
             yield client
 

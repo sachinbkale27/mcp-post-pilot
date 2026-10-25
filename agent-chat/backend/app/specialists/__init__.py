@@ -46,6 +46,7 @@ class AgentSpec:
     images: bool = False
     attachment_base_url: str = ""
     report_tool: str = ""
+    forward_viewer: bool = False  # send the visitor's place (app/viewer.py) to this server, for its usage counts
 
     @property
     def tool_name(self) -> str:
@@ -77,6 +78,7 @@ def parse_agents(entries: list[dict], base_dir: Path) -> tuple[AgentSpec, ...]:
                 images=bool(entry.get("images", False)),
                 attachment_base_url=_expand(entry.get("attachment_base_url", "")).rstrip("/"),
                 report_tool=entry.get("report_tool", ""),
+                forward_viewer=bool(entry.get("forward_viewer", False)),
             )
         )
     if not specs:
