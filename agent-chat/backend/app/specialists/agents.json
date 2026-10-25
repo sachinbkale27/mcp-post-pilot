@@ -23,7 +23,8 @@
     "description": "Works in Image Label, an image annotation tool: uploads images (including ones attached in this chat), adds or cleans up annotations (polygons, circles, rectangles, pins, arrows) and exports COCO or YOLO training data. Its annotations are drafts for a person to review.",
     "mcp_url": "${LABELS_MCP_URL}",
     "headers": {
-      "authorization": "Bearer ${LABELS_MCP_TOKEN}"
+      "authorization": "Bearer ${LABELS_MCP_TOKEN}",
+      "user-agent": "post-pilot-agent-chat/1.0"
     },
     "prompt_file": "prompts/labels.md",
     "images": true,
