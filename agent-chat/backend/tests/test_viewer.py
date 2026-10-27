@@ -13,7 +13,8 @@ def test_visitor_place_from_cloudfront():
     viewer = viewer_headers(headers)
     assert viewer["x-viewer-country"] == "BR" and viewer["x-viewer-time-zone"] == "America/Sao_Paulo"
     assert viewer["x-viewer-city"] == "S%C3%A3o Paulo"  # header-safe; the API decodes it
-    assert len(viewer["x-viewer-visitor"]) == 12 and "203.0.113.7" not in str(viewer)
+    assert len(viewer["x-viewer-visitor"]) == 12 and "203.0.113.7" not in viewer["x-viewer-visitor"]
+    assert viewer["x-viewer-address"] == "203.0.113.7"  # for Image Label's keyed hash (distinct addresses)
     # the same person on another port is the same visitor; another browser is not
     assert viewer_headers({**headers, "cloudfront-viewer-address": "203.0.113.7:6000"})["x-viewer-visitor"] == viewer["x-viewer-visitor"]
     assert viewer_headers({**headers, "user-agent": "curl"})["x-viewer-visitor"] != viewer["x-viewer-visitor"]

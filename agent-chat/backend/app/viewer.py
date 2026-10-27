@@ -2,7 +2,8 @@
 
 CloudFront adds the visitor's city, region, country and time zone to each request (CloudFront-Viewer-*). The
 visitor id is a hash of their address and browser with a secret and the date: it counts distinct visitors per
-day, can't be reversed to an address, and changes daily. Nothing is stored here; the only cookie read is the
+day, can't be reversed to an address, and changes daily. The address itself goes only to the Image Label
+server, which logs it as a keyed hash to count distinct addresses. Nothing is stored here; the only cookie read is the
 owner's "internal" mark.
 """
 
@@ -31,6 +32,8 @@ def viewer_headers(headers: dict[str, str]) -> dict[str, str]:
         "x-viewer-region": headers.get("cloudfront-viewer-country-region-name", ""),
         "x-viewer-city": headers.get("cloudfront-viewer-city", ""),
         "x-viewer-time-zone": headers.get("cloudfront-viewer-time-zone", ""),
+        # For counting distinct addresses: Image Label logs it only as a keyed hash
+        "x-viewer-address": address,
     }
     return {key: quote(value[:100], safe=" /_-") for key, value in values.items() if value} | internal
 
