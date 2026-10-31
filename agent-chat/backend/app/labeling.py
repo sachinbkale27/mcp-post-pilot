@@ -1,7 +1,8 @@
 """Label one image with the Image Annotation Agent, for the chat UI's "Label images" view.
 
     upload_image_from_url  (called here)    -> the image is in Image Label, with its size
-    Image Annotation Agent          (LLM + vision)  -> rough boxes -> segment_objects (Segment Anything traces them)
+    find_regions           (called here)    -> the objects Segment Anything finds by itself, numbered on a copy
+    Image Annotation Agent          (LLM + vision)  -> chooses regions (or rough boxes) -> segment_objects traces them
     get_image, export_annotations (here)    -> the saved shapes and COCO / YOLO exports for the UI
 
 Only the annotating is left to the model; uploading and reading the result back are done in code, so the
@@ -26,10 +27,10 @@ image attached here: do not upload it again. It may already have annotations (fo
 detect_nuclei): keep them, and only add new ones.
 
 What to label: {instructions}
-{labels}{grid}
-Look at the image, then outline every object to label with one segment_objects call on image {image_id}
-(model "{model}"): give each a rough box that contains the whole object, a little loose rather than tight;
-the segmentation model traces the exact edges (it is already warming up: don't call warm_up).
+{labels}{grid}{regions}
+Look at the image, then outline every object to label with segment_objects on image {image_id} (model
+"{model}", up to 20 objects per call): give each a box that contains the whole object, a little loose rather
+than tight; the segmentation model traces the exact edges (it is already warming up: don't call warm_up).
 If segment_objects fails, or fails for some objects, draw
 those yourself with add_annotations (polygons, confidence "low") and say so.
 
@@ -50,6 +51,23 @@ GRID = """The attached copy has a yellow grid drawn on it, with lines every {ste
 pixel values along the top and left edges. Use the grid to read off coordinates: for each object, find the
 grid cell of each edge, then estimate within the cell. The grid is not part of the saved image.
 """
+
+
+REGIONS = """
+Segment Anything has already found the distinct regions in the image by itself: the second attached copy
+has them outlined in cyan and numbered (the number is at each outline's top-left corner). Their exact boxes
+[x, y, width, height]:
+{listing}
+Decide which numbered regions are objects to label, and give segment_objects their boxes exactly as listed:
+don't estimate boxes for those. Where one region lies inside another (e.g. a gland's lumen inside the whole
+gland), choose the one that matches the whole object. Skip regions that are background, artefacts or other
+structures. Only for an object no region matches, read a box off the grid yourself. List the region numbers
+you used in your report.
+"""
+
+
+def _listing(regions: list[dict[str, Any]]) -> str:
+    return "\n".join(f"{r['region']}: {r['box']}" for r in regions)
 
 
 class LabelingUnavailable(RuntimeError):
@@ -89,6 +107,14 @@ async def share_link(image_id: str) -> str:
     return _decode(content)["url"]
 
 
+async def find_regions(mcp, image_id: str) -> tuple[list[dict[str, Any]], str]:
+    """The regions Segment Anything finds by itself, and a data URL of the image with them numbered."""
+    result = await mcp.call_tool("find_regions", {"image_id": image_id})
+    info = json.loads(next(c.text for c in result.content if c.type == "text"))
+    picture = next(c for c in result.content if c.type == "image")
+    return info["regions"], f"data:{picture.mimeType};base64,{picture.data}"
+
+
 def _decode(content: str) -> Any:
     try:
         value = json.loads(content)
@@ -124,14 +150,28 @@ async def run_labeling(
             raise RuntimeError(f"{name} failed: {content}"[:300])
         return output
 
+    async def regions_of(mcp, image_id: str) -> tuple[list[dict[str, Any]], str | None]:
+        """find_regions, shown in the UI like the other calls. Best effort: without regions the agent places
+        boxes itself, as before."""
+        call_id = f"find_regions-{uuid.uuid4()}"
+        arguments = {"image_id": image_id}
+        emit({"type": "tool_call", "id": call_id, "name": "find_regions", "input": arguments, "agent": spec.name, "delegation": delegation})
+        try:
+            regions, marked = await find_regions(mcp, image_id)
+        except Exception as exc:  # an older label server, or the model is busy
+            emit({"type": "tool_result", "id": call_id, "name": "find_regions", "output": f"No regions: {exc}"[:300], "is_error": True, "agent": spec.name, "delegation": delegation})
+            return [], None
+        emit({"type": "tool_result", "id": call_id, "name": "find_regions", "output": {"regions": regions}, "is_error": False, "agent": spec.name, "delegation": delegation})
+        return regions, marked if regions else None
+
     async def produce() -> None:
         url = spec.attachment_base_url + image["url"] if image["url"].startswith("/") else image["url"]
         task = "Upload the image, annotate it and export the result"
         emit({"type": "agent_start", "id": delegation, "agent": spec.name, "title": spec.title, "task": task})
         is_error = False
         try:
-            # Start loading the segmentation model now; it's needed after the upload and the agent's look
-            warming = asyncio.create_task(warm_up(model))
+            # Start loading the segmentation models now: SAM finds the regions, then traces (or MedSAM does)
+            warming = asyncio.gather(*(warm_up(m) for m in dict.fromkeys(["sam", model])))
             async with connect(spec) as mcp:
                 if image_id:
                     uploaded = await tool(mcp, "get_image", {"image_id": image_id})
@@ -139,8 +179,10 @@ async def run_labeling(
                     uploaded = await tool(
                         mcp, "upload_image_from_url", {"url": url, "name": image.get("name") or "image", "category": category}
                     )
-            await warming
-            target = uploaded["imageId"]
+                await warming
+                target = uploaded["imageId"]
+                regions, marked = await regions_of(mcp, target)
+            pictures = [image] + ([{**image, "data_url": marked, "name": "the regions, numbered"}] if marked else [])
             label_line = f"Use exactly these label names: {', '.join(labels)}.\n" if labels else ""
             report = await run_specialist(
                 spec,
@@ -152,11 +194,12 @@ async def run_labeling(
                     instructions=instructions,
                     labels=label_line,
                     grid=GRID.format(step=grid_step) if grid_step else "",
+                    regions=REGIONS.format(listing=_listing(regions)) if marked else "",
                     model=model,
                     medical=MEDICAL if model == "medsam" else "",
                 ),
                 user_text=instructions,
-                images=[image],
+                images=pictures,
                 delegation_id=delegation,
                 emit=emit,
             )

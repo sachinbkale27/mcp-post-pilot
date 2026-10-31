@@ -47,7 +47,7 @@ def label_server(monkeypatch):
 
     async def fake_specialist(spec, *, task, images, delegation_id, emit, **_):
         calls.append(("agent", task))
-        assert images == [IMAGE]
+        calls.append(("images", images))
         emit({"type": "tool_call", "id": "t1", "name": "add_annotations", "input": {}, "agent": "labels", "delegation": delegation_id})
         return "Labeled one cat (approximate)."
 
@@ -64,12 +64,17 @@ async def test_uploads_annotates_and_returns_the_saved_result(label_server):
     events = [e async for e in labeling.run_labeling(IMAGE, "Circle every cat", ["cat", "dog"], "pets", 50, "medsam")]
 
     assert ("warm_up", {"model": "medsam"}) in label_server and ("warm_up", {"model": "nuclei"}) in label_server
+    assert ("warm_up", {"model": "sam"}) in label_server  # it finds the regions
     upload = next(c for c in label_server if c[0] == "upload_image_from_url")
     assert upload == ("upload_image_from_url", {"url": "https://blog.example/media/abc.webp", "name": "cats.webp", "category": "pets"})
     task = next(t for name, t in label_server if name == "agent")
     assert "img-1 (200 x 100 pixels)" in task and "Circle every cat" in task and "cat, dog" in task
     assert "Possible interpretation" in task and "never the wording of the request" in task
-    assert "lines every 50 pixels" in task and 'segment_objects call on image img-1\n(model "medsam")' in task
+    assert "lines every 50 pixels" in task and 'segment_objects on image img-1 (model\n"medsam"' in task
+    # The label server couldn't find regions (this stub has none): the agent places boxes itself
+    assert "numbered" not in task and dict(label_server)["images"] == [IMAGE]
+    failed = next(e for e in events if e["type"] == "tool_result" and e["name"] == "find_regions")
+    assert failed["is_error"]
 
     types = [e["type"] for e in events]
     assert types[0] == "agent_start" and types[-1] == "agent_end" and not events[-1]["is_error"]
@@ -78,6 +83,33 @@ async def test_uploads_annotates_and_returns_the_saved_result(label_server):
     assert result["image_id"] == "img-1" and result["annotations"] == SAVED
     assert result["exports"] == {"coco": "coco-json", "yolo": EXPORTS["yolo"], "qupath": EXPORTS["qupath"]}
     assert result["report"] == "Labeled one cat (approximate)."
+
+
+async def test_the_agent_chooses_from_the_regions_found(label_server, monkeypatch):
+    from types import SimpleNamespace
+
+    regions = [{"region": 1, "box": [10, 12, 40, 30], "area": 900, "score": 0.97}]
+    content = [
+        SimpleNamespace(type="text", text=json.dumps({"image_id": "img-1", "regions": regions})),
+        SimpleNamespace(type="image", mimeType="image/jpeg", data="QUJD"),
+    ]
+
+    @asynccontextmanager
+    async def server_with_regions(spec):
+        async def call_tool(name, arguments):
+            assert (name, arguments) == ("find_regions", {"image_id": "img-1"})
+            return SimpleNamespace(content=content)
+
+        yield SimpleNamespace(call_tool=call_tool)
+
+    monkeypatch.setattr(labeling, "connect", server_with_regions)
+    events = [e async for e in labeling.run_labeling(IMAGE, "Outline every gland", [], "path", 50)]
+
+    task = dict(label_server)["agent"]
+    assert "numbered" in task and "1: [10, 12, 40, 30]" in task
+    assert dict(label_server)["images"] == [IMAGE, {**IMAGE, "data_url": "data:image/jpeg;base64,QUJD", "name": "the regions, numbered"}]
+    found = next(e for e in events if e["type"] == "tool_result" and e["name"] == "find_regions")
+    assert not found["is_error"] and found["output"] == {"regions": regions}
 
 
 def test_endpoint_reports_a_missing_labeling_agent(monkeypatch):
