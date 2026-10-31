@@ -92,6 +92,8 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          # The Image Annotation Agent uses Claude when this is set (it places boxes far better)
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-2024-11-20' }}
           OPENAI_IMAGE_MODEL: ${{ vars.OPENAI_IMAGE_MODEL || 'gpt-image-2.5-flare' }}
           LANGSMITH_TRACING: ${{ vars.LANGSMITH_TRACING || 'true' }}
@@ -109,6 +111,7 @@ jobs:
           [ -n "$OPENAI_API_KEY" ] || echo "::warning::OPENAI_API_KEY secret is not set; keeping the value already in Parameter Store (if any)"
           put OPENAI_API_KEY SecureString
           put LANGSMITH_API_KEY SecureString
+          put ANTHROPIC_API_KEY SecureString
           put OPENAI_MODEL String
           put OPENAI_IMAGE_MODEL String
           put LANGSMITH_TRACING String

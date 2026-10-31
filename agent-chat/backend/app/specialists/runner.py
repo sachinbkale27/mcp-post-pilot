@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_openai import ChatOpenAI
+from langchain_core.language_models import BaseChatModel
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langsmith import traceable
 from mcp.client.client import Client
@@ -77,7 +77,7 @@ async def call_mcp_tool(mcp: Client, name: str, arguments: dict[str, Any]) -> tu
     return "\n".join(c.text for c in result.content if c.type == "text"), bool(result.is_error)
 
 
-def build_graph(model: ChatOpenAI, mcp: Client, tools: list[dict[str, Any]], prompt: str):
+def build_graph(model: BaseChatModel, mcp: Client, tools: list[dict[str, Any]], prompt: str):
     bound = model.bind_tools(tools) if tools else model
 
     async def agent(state: MessagesState) -> dict:
@@ -131,7 +131,7 @@ REPORT_REMINDER = (
 async def run_specialist(
     spec: AgentSpec,
     *,
-    model: ChatOpenAI,
+    model: BaseChatModel,
     task: str,
     user_text: str,
     images: list[dict[str, str]],

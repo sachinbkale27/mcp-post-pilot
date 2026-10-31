@@ -12,6 +12,7 @@ UI always gets the image id, the saved annotations and the exports. Events use t
 
 import asyncio
 import json
+import os
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
@@ -72,6 +73,19 @@ object. List the region numbers you used in your report.
 
 def _listing(regions: list[dict[str, Any]]) -> str:
     return "\n".join(f"{r['region']}: {r['box']}" for r in regions)
+
+
+# Claude places boxes far more accurately than GPT-4o (whose boxes often missed the objects), so the agent uses
+# it when an Anthropic key is set
+LABEL_MODEL = os.getenv("LABEL_MODEL", "claude-opus-5-5")
+
+
+def labeling_model():
+    if os.getenv("ANTHROPIC_API_KEY"):
+        from langchain_anthropic import ChatAnthropic
+
+        return ChatAnthropic(model=LABEL_MODEL, max_tokens=8000)
+    return _model(disable_streaming=True)
 
 
 class LabelingUnavailable(RuntimeError):
@@ -191,7 +205,7 @@ async def run_labeling(
             label_line = f"Use exactly these label names: {', '.join(labels)}.\n" if labels else ""
             report = await run_specialist(
                 spec,
-                model=_model(disable_streaming=True),
+                model=labeling_model(),
                 task=TASK.format(
                     image_id=target,
                     width=uploaded.get("width"),

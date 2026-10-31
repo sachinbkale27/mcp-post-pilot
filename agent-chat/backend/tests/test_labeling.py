@@ -219,3 +219,12 @@ async def test_share_link_asks_the_label_server(monkeypatch):
     monkeypatch.setattr(labeling, "call_mcp_tool", fake_call)
     assert await labeling.share_link("img-1") == "https://labels.example/?shared=abc"
     assert calls == [("share_image", {"image_id": "img-1"})]
+
+
+def test_the_agent_uses_claude_when_an_anthropic_key_is_set(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+    assert type(labeling.labeling_model()).__name__ == "ChatOpenAI"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    model = labeling.labeling_model()
+    assert type(model).__name__ == "ChatAnthropic" and model.model == labeling.LABEL_MODEL
