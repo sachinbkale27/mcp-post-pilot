@@ -54,15 +54,19 @@ grid cell of each edge, then estimate within the cell. The grid is not part of t
 
 
 REGIONS = """
-Segment Anything has already found the distinct regions in the image by itself: the second attached copy
-has them outlined in cyan and numbered (the number is at each outline's top-left corner). Their exact boxes
+Segment Anything has already found distinct regions in the image by itself: the second attached copy has
+them outlined in cyan and numbered (the number is at each outline's top-left corner). Their exact boxes
 [x, y, width, height]:
 {listing}
 Decide which numbered regions are objects to label, and give segment_objects their boxes exactly as listed:
 don't estimate boxes for those. Where one region lies inside another (e.g. a gland's lumen inside the whole
-gland), choose the one that matches the whole object, never both: one region per object. Skip regions that are background, artefacts or other
-structures. Only for an object no region matches, read a box off the grid yourself. List the region numbers
-you used in your report.
+gland), choose the one that matches the whole object, never both: one region per object. Skip regions that
+are background, empty spaces, vessels, artefacts or fragments of other structures.
+The regions are not complete: large structures (cell nests, lobules, tumour islands, big glands) and
+objects without a clear edge are often missing, or only a small part of them (such as a lumen) is a region.
+Look at the whole image for every object to label; for each one no region covers whole, read a box off the
+grid yourself (loose is fine: the model finds the edges). Never use a small region in place of a large
+object. List the region numbers you used in your report.
 """
 
 
