@@ -88,10 +88,12 @@ async def test_uploads_annotates_and_returns_the_saved_result(label_server):
 async def test_the_agent_chooses_from_the_regions_found(label_server, monkeypatch):
     from types import SimpleNamespace
 
+    from mcp.types import ImageContent, TextContent
+
     regions = [{"region": 1, "box": [10, 12, 40, 30], "area": 900, "score": 0.97}]
     content = [
-        SimpleNamespace(type="text", text=json.dumps({"image_id": "img-1", "regions": regions})),
-        SimpleNamespace(type="image", mimeType="image/jpeg", data="QUJD"),
+        TextContent(type="text", text=json.dumps({"image_id": "img-1", "regions": regions})),
+        ImageContent(type="image", mime_type="image/jpeg", data="QUJD"),
     ]
 
     @asynccontextmanager

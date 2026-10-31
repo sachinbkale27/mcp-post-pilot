@@ -112,7 +112,7 @@ async def find_regions(mcp, image_id: str) -> tuple[list[dict[str, Any]], str]:
     result = await mcp.call_tool("find_regions", {"image_id": image_id})
     info = json.loads(next(c.text for c in result.content if c.type == "text"))
     picture = next(c for c in result.content if c.type == "image")
-    return info["regions"], f"data:{picture.mimeType};base64,{picture.data}"
+    return info["regions"], f"data:{picture.mime_type};base64,{picture.data}"
 
 
 def _decode(content: str) -> Any:
@@ -159,6 +159,7 @@ async def run_labeling(
         try:
             regions, marked = await find_regions(mcp, image_id)
         except Exception as exc:  # an older label server, or the model is busy
+            print(f"find_regions failed: {exc!r}")
             emit({"type": "tool_result", "id": call_id, "name": "find_regions", "output": f"No regions: {exc}"[:300], "is_error": True, "agent": spec.name, "delegation": delegation})
             return [], None
         emit({"type": "tool_result", "id": call_id, "name": "find_regions", "output": {"regions": regions}, "is_error": False, "agent": spec.name, "delegation": delegation})
