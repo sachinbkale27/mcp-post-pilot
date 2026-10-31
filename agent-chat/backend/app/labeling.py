@@ -60,7 +60,7 @@ has them outlined in cyan and numbered (the number is at each outline's top-left
 {listing}
 Decide which numbered regions are objects to label, and give segment_objects their boxes exactly as listed:
 don't estimate boxes for those. Where one region lies inside another (e.g. a gland's lumen inside the whole
-gland), choose the one that matches the whole object. Skip regions that are background, artefacts or other
+gland), choose the one that matches the whole object, never both: one region per object. Skip regions that are background, artefacts or other
 structures. Only for an object no region matches, read a box off the grid yourself. List the region numbers
 you used in your report.
 """
@@ -196,7 +196,8 @@ async def run_labeling(
                     labels=label_line,
                     grid=GRID.format(step=grid_step) if grid_step else "",
                     regions=REGIONS.format(listing=_listing(regions)) if marked else "",
-                    model=model,
+                    # SAM found the regions: it traces their boxes cleanly, where MedSAM gives ragged outlines
+                    model="sam" if marked else model,
                     medical=MEDICAL if model == "medsam" else "",
                 ),
                 user_text=instructions,

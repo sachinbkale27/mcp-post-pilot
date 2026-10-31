@@ -105,10 +105,11 @@ async def test_the_agent_chooses_from_the_regions_found(label_server, monkeypatc
         yield SimpleNamespace(call_tool=call_tool)
 
     monkeypatch.setattr(labeling, "connect", server_with_regions)
-    events = [e async for e in labeling.run_labeling(IMAGE, "Outline every gland", [], "path", 50)]
+    events = [e async for e in labeling.run_labeling(IMAGE, "Outline every gland", [], "path", 50, "medsam")]
 
     task = dict(label_server)["agent"]
-    assert "numbered" in task and "1: [10, 12, 40, 30]" in task
+    assert '(model\n"sam"' in task  # traces the regions with the model that found them
+    assert "numbered" in task and "1: [10, 12, 40, 30]" in task and "one region per object" in task
     assert dict(label_server)["images"] == [IMAGE, {**IMAGE, "data_url": "data:image/jpeg;base64,QUJD", "name": "the regions, numbered"}]
     found = next(e for e in events if e["type"] == "tool_result" and e["name"] == "find_regions")
     assert not found["is_error"] and found["output"] == {"regions": regions}
