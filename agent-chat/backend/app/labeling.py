@@ -32,6 +32,10 @@ What to label: {instructions}
 Look at the image, then outline every object to label with segment_objects on image {image_id} (model
 "{model}", up to 20 objects per call): give each a box that contains the whole object, a little loose rather
 than tight; the segmentation model traces the exact edges (it is already warming up: don't call warm_up).
+A box suits a compact object and should be mostly that object. For a thin, curved or interlocking structure
+(e.g. rete ridges, an epidermal band, a vessel wall) a box is mostly other tissue and gets the wrong outline:
+give a point on it instead (model "sam"), or outline the compact structures it surrounds. Never box a large
+share of the image to catch one structure.
 If segment_objects fails, or fails for some objects, draw
 those yourself with add_annotations (polygons, confidence "low") and say so.
 
@@ -95,7 +99,9 @@ tissue, e.g. glands, cell nests, ducts, vessels, hair follicles, cysts, lesions,
 each object), skipping plain background. Also outline important parts inside a structure as objects of their
 own (e.g. a cyst's keratin contents, a gland's lumen), and every partly visible structure at the image's
 edges. Name each with the most specific term that fits, for tissue the standard histopathological one (e.g.
-"pseudohorn cyst", "horn cyst", "comedo", "sebaceous lobule") rather than a general description."""
+"pseudohorn cyst", "horn cyst", "comedo", "sebaceous lobule") rather than a general description. Mark
+features of cells that have no outline of their own (e.g. melanin pigment in the basal layer, perinuclear
+halos, mitotic figures) with a few labelled pins (add_annotations, type "pin") on clear examples."""
 
 
 class LabelingUnavailable(RuntimeError):
