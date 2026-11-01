@@ -247,11 +247,14 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     const annotations = result?.annotations ?? [];
     const counts = new Map<string, number>();
     const largest = new Map<string, Annotation>(); // the biggest example of each finding, for a close-up
+    const byLabel = new Map<string, Annotation[]>();
     for (const a of annotations) {
       if (/nucleus$/i.test(a.label) || /^suspected\b/i.test(a.label)) continue;
       counts.set(a.label, (counts.get(a.label) ?? 0) + 1);
+      byLabel.set(a.label, [...(byLabel.get(a.label) ?? []), a]);
       if (shapeArea(a) > shapeArea(largest.get(a.label))) largest.set(a.label, a);
     }
+    const imageArea = result ? result.width * result.height : 0;
     const blog = BLOG_URL.replace(/\/+$/, "");
     // The annotated figure, so the questions can show it (best effort: the handoff works without it)
     let figureUrl: string | undefined;
@@ -265,14 +268,30 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
         image_url: upload?.url?.startsWith("/") && blog.startsWith("https://") ? `${blog}${upload.url}` : undefined,
         figure_url: figureUrl,
         image_name: (upload?.name ?? "").slice(0, 200),
+        request: instructions.trim().slice(0, 500),
         suspected_diagnosis: (diagnosis?.suspected ?? "").slice(0, 200),
-        findings: [...counts].slice(0, 20).map(([label, count]) => ({
-          label: label.slice(0, 120),
-          count,
-          significance: (significance.get(label) ?? "").slice(0, 400),
-          box: result ? closeUpBox(largest.get(label), result.width, result.height) : undefined,
-        })),
+        findings: [...counts].slice(0, 20).map(([label, count]) => {
+          const shapes = byLabel.get(label) ?? [];
+          const outlined = shapes.filter((a) => a.type !== "pin" && a.type !== "arrow");
+          return {
+            label: label.slice(0, 120),
+            count,
+            significance: (significance.get(label) ?? "").slice(0, 400),
+            notes: findingNotes(shapes),
+            kind: outlined.length === shapes.length ? "outline" : outlined.length ? "mixed" : "pin",
+            confidence: mostCommon(shapes.map((a) => a.confidence ?? "")) as "high" | "medium" | "low" | "",
+            area_percent: imageArea && outlined.length
+              ? Math.min(100, Math.round((1000 * outlined.reduce((sum, a) => sum + shapeArea(a), 0)) / imageArea) / 10)
+              : undefined,
+            box: result ? closeUpBox(largest.get(label), result.width, result.height) : undefined,
+          };
+        }),
         nuclei: run?.result?.nuclei_summary ?? lastNuclei,
+        cell_types: run?.result?.cell_types && {
+          classified: run.result.cell_types.classified,
+          percent: run.result.cell_types.percent,
+          immune_to_tumour: run.result.cell_types.immune_to_tumour,
+        },
         quality: lastQuality && { verdict: lastQuality.verdict, warnings: lastQuality.warnings.slice(0, 8) },
         interpretation: (diagnosis?.text ?? "").slice(0, 8000),
         report: (run?.result?.report ?? "").slice(0, 4000),
@@ -750,6 +769,20 @@ function downloadDataUrl(dataUrl: string, filename: string) {
 async function downloadFigure(base: string) {
   const blob = await renderFigure(1600, "image/png");
   if (blob) downloadDataUrl(URL.createObjectURL(blob), `${base}-annotated.png`);
+}
+
+/** What the annotating agent noted about a finding, without the tracing boilerplate ("Traced by SAM (score 0.93).") */
+function findingNotes(shapes: Annotation[]): string {
+  const notes = shapes
+    .map((a) => (a.notes ?? "").replace(/\s*Traced by \w+ \(score [\d.]+\)\.?/g, "").trim())
+    .filter(Boolean);
+  return [...new Set(notes)].join("; ").slice(0, 400);
+}
+
+function mostCommon(values: string[]): string {
+  const counts = new Map<string, number>();
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
 }
 
 function shapeArea(a?: Annotation): number {

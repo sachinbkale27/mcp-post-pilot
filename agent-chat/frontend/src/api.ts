@@ -228,9 +228,20 @@ export interface ResultsHandoff {
   image_url?: string;
   figure_url?: string; // the annotated figure, uploaded for the handoff
   image_name: string;
+  request: string; // what the user asked to label ("" for everything)
   suspected_diagnosis: string;
-  findings: { label: string; count: number; significance: string; box?: number[] }[];
+  findings: {
+    label: string;
+    count: number;
+    significance: string;
+    notes: string; // what the annotating agent noted about it
+    kind: "outline" | "pin" | "mixed";
+    confidence: "high" | "medium" | "low" | "";
+    area_percent?: number; // share of the image its outlines cover
+    box?: number[];
+  }[];
   nuclei?: NucleiSummary;
+  cell_types?: { classified: number; percent: Record<string, number>; immune_to_tumour: number | null };
   quality?: { verdict: QualityResult["verdict"]; warnings: string[] };
   interpretation: string;
   report: string;

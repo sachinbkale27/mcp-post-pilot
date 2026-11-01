@@ -21,6 +21,10 @@ class Finding(BaseModel):
     label: str = Field(max_length=120)
     count: int = Field(1, ge=0, le=10000)
     significance: str = Field("", max_length=400)
+    notes: str = Field("", max_length=400)  # what the annotating agent noted about it
+    kind: Literal["outline", "pin", "mixed"] = "outline"
+    confidence: Literal["high", "medium", "low", ""] = ""
+    area_percent: float | None = Field(None, ge=0, le=100)
     box: list[Annotated[float, Field(ge=0, le=1)]] | None = Field(None, min_length=4, max_length=4)
 
 
@@ -30,6 +34,12 @@ class Nuclei(BaseModel):
     median_area: float = Field(ge=0)
     area_variation: float = Field(ge=0)
     enlarged: int = Field(ge=0)
+
+
+class CellTypes(BaseModel):
+    classified: int = Field(ge=0)
+    percent: dict[str, float] = Field(default_factory=dict, max_length=10)
+    immune_to_tumour: float | None = Field(None, ge=0)
 
 
 class Quality(BaseModel):
@@ -43,9 +53,11 @@ class ResultsHandoff(BaseModel):
     image_url: str | None = Field(None, max_length=500, pattern=r"^https://[\w.-]+(/[\w./%-]*)?$")
     figure_url: str | None = Field(None, max_length=500, pattern=r"^https://[\w.-]+(/[\w./%-]*)?$")
     image_name: str = Field("", max_length=200)
+    request: str = Field("", max_length=500)  # what the user asked to label ("" for everything)
     suspected_diagnosis: str = Field("", max_length=200)
     findings: list[Finding] = Field(default_factory=list, max_length=20)
     nuclei: Nuclei | None = None
+    cell_types: CellTypes | None = None
     quality: Quality | None = None
     interpretation: str = Field("", max_length=8000)
     report: str = Field("", max_length=4000)

@@ -47,6 +47,10 @@ what it is, never the wording of the request: e.g. "car", "pedestrian", or for m
 morphological terms such as "pigment-laden macrophage", "atypical cell cluster", "necrosis", "stroma",
 "lymphocytic infiltrate". Reuse a name for objects of the same kind. Don't use diagnoses as labels.
 
+In each object's notes (segment_objects and add_annotations both take them), write one short line on what you
+see in it that makes it that label: its features (e.g. "laminated orthokeratin, no atypia", "dense basal melanin
+in elongated rete ridge"), not the label again.
+
 Report what you labeled, the scores, and anything you were unsure about.{medical}"""
 
 MEDICAL = """ For this medical image, end the report
