@@ -15,7 +15,7 @@ const FAQ: FaqItem[] = [
     a: (
       <ul>
         <li><strong>Image</strong> <Need /> Upload a file or paste an image URL, one or the other.</li>
-        <li><strong>What to label</strong> <Need /> Needed for Annotate; the histology tools and Diagnose work without it.</li>
+        <li><strong>What to label</strong> <Optional /> What to outline; left empty, Annotate outlines everything distinct it finds.</li>
         <li><strong>Label names</strong> <Optional /> The names to use for the outlines.</li>
         <li><strong>Image type</strong> <Optional /> Starts on "Photo or general image"; change it for medical scans.</li>
       </ul>

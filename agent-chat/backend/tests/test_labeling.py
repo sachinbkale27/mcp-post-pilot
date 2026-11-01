@@ -125,7 +125,7 @@ def test_endpoint_reports_a_missing_labeling_agent(monkeypatch):
 def test_endpoint_validates_the_request():
     with TestClient(main.app) as client:
         assert client.post("/label", json={"image": {**IMAGE, "url": "https://evil.example/x.png"}, "instructions": "x y z"}).status_code == 422
-        assert client.post("/label", json={"image": IMAGE, "instructions": "go", "labels": ["x" * 41]}).status_code == 422
+        assert client.post("/label", json={"image": IMAGE, "instructions": "go", "labels": ["x" * 81]}).status_code == 422
 
 
 async def test_warm_up_is_best_effort(label_server, monkeypatch):
@@ -228,3 +228,14 @@ def test_the_agent_uses_claude_when_an_anthropic_key_is_set(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
     model = labeling.labeling_model()
     assert type(model).__name__ == "ChatAnthropic" and model.model == labeling.LABEL_MODEL
+
+
+async def test_empty_instructions_outline_everything(label_server):
+    [e async for e in labeling.run_labeling(IMAGE, "  ", [], "path", 50)]
+    assert "What to label: Everything of interest" in dict(label_server)["agent"]
+
+
+def test_endpoint_accepts_no_instructions(monkeypatch):
+    from app.main import LabelRequest
+
+    assert LabelRequest(image=IMAGE).instructions == ""

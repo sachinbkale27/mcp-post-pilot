@@ -64,7 +64,7 @@ MAX_LABEL = 80  # medical terms run long, e.g. "melanophages (pigment-laden macr
 
 class LabelRequest(BaseModel):
     image: ChatImage
-    instructions: str = Field(min_length=3, max_length=2000)
+    instructions: str = Field(default="", max_length=2000)  # empty: outline everything distinct
     labels: list[str] = Field(default_factory=list, max_length=20)
     category: str = Field(default="agent-chat", max_length=60)
     grid_step: int | None = Field(default=None, ge=10, le=1000)  # the model's copy has a pixel grid this far apart

@@ -88,6 +88,12 @@ def labeling_model():
     return _model(disable_streaming=True)
 
 
+# "What to label" left empty
+EVERYTHING = """Everything of interest: outline each distinct object or structure in the image separately (for
+tissue, e.g. glands, cell nests, ducts, vessels, hair follicles, lesions; for photos, each object), skipping
+plain background, and name each with a specific term for what it is."""
+
+
 class LabelingUnavailable(RuntimeError):
     pass
 
@@ -153,6 +159,7 @@ async def run_labeling(
     """Yield UI events while the image is uploaded, annotated and exported. With image_id (an image already
     in Image Label, e.g. from an earlier run or a histology tool), the new annotations are added to it."""
     spec = labeling_agent()
+    instructions = instructions.strip() or EVERYTHING
     queue: asyncio.Queue = asyncio.Queue()
     delegation = f"label-{uuid.uuid4()}"
     emit = queue.put_nowait

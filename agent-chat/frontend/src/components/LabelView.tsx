@@ -97,7 +97,8 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     if (run?.result) resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [run?.result]);
 
-  const canRun = available && !busy && upload?.status === "ready" && instructions.trim().length >= 3;
+  // "What to label" is optional: left empty, the agent outlines everything distinct
+  const canRun = available && !busy && upload?.status === "ready";
 
   function addFile(file: File | undefined, keepOriginal = false) {
     if (!file || (busy && !keepOriginal)) return;
@@ -419,7 +420,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
             className="label-input"
             rows={3}
             value={instructions}
-            placeholder="e.g. Outline every person and every car."
+            placeholder="e.g. Outline every person and every car. Leave empty to outline everything."
             onChange={(e) => setInstructions(e.target.value)}
             disabled={busy}
           />
@@ -577,8 +578,8 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
               {!diagnosis.pending && !diagnosis.error && diagnosis.regions?.length === 0 && (
                 // Diagnose outlines only abnormal findings; without any, nothing is annotated
                 <p className="label-alert">
-                  <CircleAlert size={16} aria-hidden /> No problematic regions found, so nothing was outlined. To
-                  outline structures such as glands or follicles, write them in "What to label" and press Annotate.
+                  <CircleAlert size={16} aria-hidden /> No problematic regions found, so nothing was outlined. Press
+                  Annotate to outline the structures (leave "What to label" empty for everything).
                 </p>
               )}
             </section>
