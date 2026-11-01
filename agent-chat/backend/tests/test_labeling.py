@@ -51,6 +51,10 @@ def label_server(monkeypatch):
         emit({"type": "tool_call", "id": "t1", "name": "add_annotations", "input": {}, "agent": "labels", "delegation": delegation_id})
         return "Labeled one cat (approximate)."
 
+    async def no_checklist(_):  # tests that want one set their own
+        raise RuntimeError("no model in tests")
+
+    monkeypatch.setattr(labeling, "plan_findings", no_checklist)
     monkeypatch.setattr(labeling, "load_agents", lambda: (LABELS,))
     monkeypatch.setattr(labeling, "connect", fake_connect)
     monkeypatch.setattr(labeling, "call_mcp_tool", fake_call)
@@ -239,3 +243,32 @@ def test_endpoint_accepts_no_instructions(monkeypatch):
     from app.main import LabelRequest
 
     assert LabelRequest(image=IMAGE).instructions == ""
+
+
+async def test_outlining_everything_follows_a_checklist_and_marks_what_was_missed(label_server, monkeypatch):
+    items = [
+        labeling.ChecklistItem(label="cat", mark="outline", where="centre"),
+        labeling.ChecklistItem(label="perinuclear halo", mark="pin", where="mid epidermis"),
+    ]
+
+    async def checklist(_):
+        return items
+
+    monkeypatch.setattr(labeling, "plan_findings", checklist)
+    events = [e async for e in labeling.run_labeling(IMAGE, "", [], "path", 50)]
+
+    tasks = [t for name, t in label_server if name == "agent"]
+    assert len(tasks) == 2  # SAVED has a cat, not the halo: a second pass for it
+    assert "- cat (outline): centre" in tasks[0] and "- perinuclear halo (pin): mid epidermis" in tasks[0]
+    assert "- perinuclear halo (pin)" in tasks[1] and "- cat" not in tasks[1]
+    made = next(e for e in events if e.get("name") == "make_checklist" and "output" in e)
+    assert not made["is_error"] and len(made["output"]["items"]) == 2
+
+
+async def test_named_labels_need_no_checklist(label_server, monkeypatch):
+    async def checklist(_):
+        raise AssertionError("not needed")
+
+    monkeypatch.setattr(labeling, "plan_findings", checklist)
+    [e async for e in labeling.run_labeling(IMAGE, "Circle every cat", ["cat"], "pets", 50)]
+    assert len([t for name, t in label_server if name == "agent"]) == 1

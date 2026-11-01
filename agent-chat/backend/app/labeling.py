@@ -15,7 +15,10 @@ import json
 import os
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, Literal
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, Field
 
 from .agent import _model
 from .specialists import AgentSpec, load_agents
@@ -111,6 +114,57 @@ features of cells that have no outline of their own (e.g. melanin pigment in the
 halos, mitotic figures) with a few labelled pins (add_annotations, type "pin") on clear examples."""
 
 
+# Outlining everything: what gets marked varied from run to run (a subtle feature such as perinuclear halos one
+# time, not the next). A checklist made first, and checked at the end, keeps runs complete and alike.
+PLAN = """List everything in this image worth annotating, for someone building a labelled dataset or teaching
+from it. Look at the whole image, including its edges. Include:
+- structures and areas with edges, to outline: e.g. glands, cysts and their contents, cell nests, layers
+  such as the stratum corneum, dermal papillae, vessels, lesions;
+- features of cells or tissue that have no edge of their own, to pin on clear examples: e.g. melanin pigment
+  in the basal layer, perinuclear halos, mitotic figures, nuclear atypia, inflammatory cells, rete ridges.
+Name each with the most specific standard term (for tissue, histopathological), never a diagnosis. Only list
+what is clearly visible. 3 to 15 items, the most important first."""
+
+MISSING = """Image Label image {image_id} ({width} x {height} pixels) already has annotations: keep them. These
+items from the checklist for it are not marked yet:
+{items}
+{grid}
+Mark each now, with exactly that label: an outline with segment_objects (a box, or a box and a point inside
+the structure), or labelled pins with add_annotations (type "pin") on clear examples, each with a short note on
+what you see. If an item turns out not to be in the image, say so instead of marking it."""
+
+
+class ChecklistItem(BaseModel):
+    label: str = Field(description="Specific term for it, used as the annotation label (under 60 characters)")
+    mark: Literal["outline", "pin"] = Field(description="outline: a structure with edges; pin: a feature of cells")
+    where: str = Field(description="Where it is in the image, briefly")
+
+
+class Checklist(BaseModel):
+    items: list[ChecklistItem] = Field(description="Everything worth annotating, the most important first")
+
+
+async def plan_findings(image_data_url: str) -> list[ChecklistItem]:
+    """The checklist of what to mark in an image, made by looking at it before annotating."""
+    model = labeling_model().with_structured_output(Checklist)
+    message = HumanMessage([
+        {"type": "image_url", "image_url": {"url": image_data_url}},
+        {"type": "text", "text": "List what to annotate in this image."},
+    ])
+    checklist = await model.ainvoke([SystemMessage(PLAN), message])
+    return checklist.items[:15]
+
+
+def _checklist(items: list[ChecklistItem]) -> str:
+    return "\n".join(f"- {i.label} ({i.mark}): {i.where}" for i in items)
+
+
+def unmarked(items: list[ChecklistItem], annotations: list[dict[str, Any]]) -> list[ChecklistItem]:
+    """Checklist items no annotation is labelled with."""
+    labels = {str(a.get("label", "")).strip().lower() for a in annotations}
+    return [i for i in items if i.label.strip().lower() not in labels]
+
+
 class LabelingUnavailable(RuntimeError):
     pass
 
@@ -176,6 +230,7 @@ async def run_labeling(
     """Yield UI events while the image is uploaded, annotated and exported. With image_id (an image already
     in Image Label, e.g. from an earlier run or a histology tool), the new annotations are added to it."""
     spec = labeling_agent()
+    everything = not instructions.strip()
     instructions = instructions.strip() or EVERYTHING
     queue: asyncio.Queue = asyncio.Queue()
     delegation = f"label-{uuid.uuid4()}"
@@ -207,6 +262,19 @@ async def run_labeling(
         emit({"type": "tool_result", "id": call_id, "name": "find_regions", "output": {"regions": regions}, "is_error": False, "agent": spec.name, "delegation": delegation})
         return regions, marked if regions else None
 
+    async def checklist_of(picture: dict[str, str]) -> list[ChecklistItem]:
+        """plan_findings, shown in the UI like a tool call. Best effort: without it the agent works as before."""
+        call_id = f"checklist-{uuid.uuid4()}"
+        emit({"type": "tool_call", "id": call_id, "name": "make_checklist", "input": {}, "agent": spec.name, "delegation": delegation})
+        try:
+            items = await plan_findings(picture["data_url"])
+        except Exception as exc:
+            print(f"plan_findings failed: {exc!r}")
+            emit({"type": "tool_result", "id": call_id, "name": "make_checklist", "output": f"No checklist: {exc}"[:300], "is_error": True, "agent": spec.name, "delegation": delegation})
+            return []
+        emit({"type": "tool_result", "id": call_id, "name": "make_checklist", "output": {"items": [i.model_dump() for i in items]}, "is_error": False, "agent": spec.name, "delegation": delegation})
+        return items
+
     async def produce() -> None:
         url = spec.attachment_base_url + image["url"] if image["url"].startswith("/") else image["url"]
         task = "Upload the image, annotate it and export the result"
@@ -227,6 +295,11 @@ async def run_labeling(
                 regions, marked = await regions_of(mcp, target)
             pictures = [image] + ([{**image, "data_url": marked, "name": "the regions, numbered"}] if marked else [])
             label_line = f"Use exactly these label names: {', '.join(labels)}.\n" if labels else ""
+            checklist = await checklist_of(image) if everything and not labels else []
+            what = (
+                f"{EVERYTHING}\n\nChecklist: mark every item, with exactly these labels:\n{_checklist(checklist)}"
+                if checklist else instructions
+            )
             report = await run_specialist(
                 spec,
                 model=labeling_model(),
@@ -234,7 +307,7 @@ async def run_labeling(
                     image_id=target,
                     width=uploaded.get("width"),
                     height=uploaded.get("height"),
-                    instructions=instructions,
+                    instructions=what,
                     labels=label_line,
                     grid=GRID.format(step=grid_step) if grid_step else "",
                     regions=REGIONS.format(listing=_listing(regions)) if marked else "",
@@ -249,6 +322,26 @@ async def run_labeling(
             )
             async with connect(spec) as mcp:
                 saved = await tool(mcp, "get_image", {"image_id": target})
+            if missing := unmarked(checklist, saved.get("annotations") or []):
+                # One more pass for what the agent left out
+                report += "\n\n" + await run_specialist(
+                    spec,
+                    model=labeling_model(),
+                    task=MISSING.format(
+                        image_id=target,
+                        width=uploaded.get("width"),
+                        height=uploaded.get("height"),
+                        items=_checklist(missing),
+                        grid=GRID.format(step=grid_step) if grid_step else "",
+                    ),
+                    user_text=instructions,
+                    images=[image],
+                    delegation_id=delegation,
+                    emit=emit,
+                )
+            async with connect(spec) as mcp:
+                if missing:
+                    saved = await tool(mcp, "get_image", {"image_id": target})
                 coco, yolo, qupath = await asyncio.gather(
                     *(tool(mcp, "export_annotations", {"image_id": target, "format": f}) for f in ("coco", "yolo", "qupath"))
                 )
