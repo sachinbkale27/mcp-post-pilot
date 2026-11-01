@@ -88,7 +88,7 @@ const FAQ: FaqItem[] = [
   },
   {
     q: "How long does it take?",
-    a: "Labelling usually takes 10 to 30 seconds. After a quiet spell, the first histology tool run can take up to a minute while the model starts.",
+    a: "Annotating usually takes 2 to 3 minutes: the agent looks at the image, finds the objects, traces each outline and checks them. After a quiet spell the first run can take a minute or two longer while the models start; the histology tools take a few seconds to a minute.",
   },
   {
     q: "What does \"Start over\" do?",

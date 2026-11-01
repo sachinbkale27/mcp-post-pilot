@@ -515,7 +515,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
 
         <section className="label-panel label-output" aria-live="polite" aria-labelledby="label-result-heading">
           <h3 id="label-result-heading">3. Result</h3>
-          {!run && !diagnosis && <p className="label-empty">The annotated image appears here. Labeling usually takes 10 to 30 seconds.</p>}
+          {!run && !diagnosis && <p className="label-empty">The annotated image appears here. Annotating usually takes 2 to 3 minutes.</p>}
 
           {/* The annotated image comes first: the interpretation below can be long */}
           <div ref={resultRef} className="label-result-anchor">
@@ -526,7 +526,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
             <p className="label-progress">
               <LoaderCircle size={15} className="spin" aria-hidden />
               {run.action ? PROGRESS[run.action] : diagnosis ? "Outlining the problematic regions on the image…" : "Annotating the image…"}
-              <span>{run.action === "cells" ? "usually 30 to 90 seconds" : run.action ? "a few seconds, up to a minute if the model is starting" : "usually 20 to 40 seconds"}</span>
+              <span>{run.action === "cells" ? "usually 30 to 90 seconds" : run.action ? "a few seconds, up to a minute if the model is starting" : "usually 2 to 3 minutes"}</span>
             </p>
           )}
           {run?.error && <p className="label-alert"><CircleAlert size={16} aria-hidden /> {run.error}</p>}
