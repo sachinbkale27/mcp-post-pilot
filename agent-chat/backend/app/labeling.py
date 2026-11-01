@@ -32,10 +32,13 @@ What to label: {instructions}
 Look at the image, then outline every object to label with segment_objects on image {image_id} (model
 "{model}", up to 20 objects per call): give each a box that contains the whole object, a little loose rather
 than tight; the segmentation model traces the exact edges (it is already warming up: don't call warm_up).
-A box suits a compact object and should be mostly that object. For a thin, curved or interlocking structure
-(e.g. rete ridges, an epidermal band, a vessel wall) a box is mostly other tissue and gets the wrong outline:
-give a point on it instead (model "sam"), or outline the compact structures it surrounds. Never box a large
-share of the image to catch one structure.
+A box suits a compact object and should be mostly that object. For a band (e.g. stratum corneum), a structure
+lying between others (e.g. a dermal papilla between rete ridges) or one cut by the image's edge, give the box
+and a point well inside the structure together (model "sam"): the point says which thing in the box is meant.
+Thin, curved or interlocking structures (e.g. rete ridges, a vessel wall) can't be outlined from a box: mark
+them with a few labelled pins instead (add_annotations, type "pin"). Never box a large share of the image to
+catch one structure. Then check the outlines with view_image(with_annotations=true): remove any that cover
+background or the wrong structure, and redo it once with a box and a point.
 If segment_objects fails, or fails for some objects, draw
 those yourself with add_annotations (polygons, confidence "low") and say so.
 
