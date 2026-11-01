@@ -122,8 +122,10 @@ from it. Look at the whole image, including its edges. Include:
   such as the stratum corneum, dermal papillae, vessels, lesions;
 - features of cells or tissue that have no edge of their own, to pin on clear examples: e.g. melanin pigment
   in the basal layer, perinuclear halos, mitotic figures, nuclear atypia, inflammatory cells, rete ridges.
-Name each with the most specific standard term (for tissue, histopathological), never a diagnosis. Only list
-what is clearly visible. 3 to 15 items, the most important first."""
+Name each with the most specific standard term (for tissue, histopathological), never a diagnosis: a short
+label of 1 to 4 words, lower case, with no slashes, alternatives or brackets (e.g. "pseudohorn cyst", "dermal
+papilla", "perinuclear halo", "melanin pigment"), the same term for every example of a kind; put any detail in
+"where". Only list what is clearly visible. 3 to 15 items, the most important first."""
 
 MISSING = """Image Label image {image_id} ({width} x {height} pixels) already has annotations: keep them. These
 items from the checklist for it are not marked yet:
@@ -135,7 +137,7 @@ what you see. If an item turns out not to be in the image, say so instead of mar
 
 
 class ChecklistItem(BaseModel):
-    label: str = Field(description="Specific term for it, used as the annotation label (under 60 characters)")
+    label: str = Field(description="Short specific term, 1 to 4 words, lower case, no slashes or brackets")
     mark: Literal["outline", "pin"] = Field(description="outline: a structure with edges; pin: a feature of cells")
     where: str = Field(description="Where it is in the image, briefly")
 
