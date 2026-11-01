@@ -574,6 +574,13 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
                 diagnosis.pending && <p className="label-empty">Looking at the image…</p>
               )}
               {diagnosis.error && <p className="label-alert"><CircleAlert size={16} aria-hidden /> {diagnosis.error}</p>}
+              {!diagnosis.pending && !diagnosis.error && diagnosis.regions?.length === 0 && (
+                // Diagnose outlines only abnormal findings; without any, nothing is annotated
+                <p className="label-alert">
+                  <CircleAlert size={16} aria-hidden /> No problematic regions found, so nothing was outlined. To
+                  outline structures such as glands or follicles, write them in "What to label" and press Annotate.
+                </p>
+              )}
             </section>
           )}
 
