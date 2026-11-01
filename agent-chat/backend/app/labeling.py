@@ -61,7 +61,8 @@ them outlined in cyan and numbered (the number is at each outline's top-left cor
 {listing}
 Decide which numbered regions are objects to label, and give segment_objects their boxes exactly as listed:
 don't estimate boxes for those. Where one region lies inside another (e.g. a gland's lumen inside the whole
-gland), choose the one that matches the whole object, never both: one region per object. Skip regions that
+gland), choose the one that matches the whole object, never both: one region per object (unless What to label
+asks for parts inside structures too). Skip regions that
 are background, empty spaces, vessels, artefacts or fragments of other structures.
 The regions are not complete: large structures (cell nests, lobules, tumour islands, big glands) and
 objects without a clear edge are often missing, or only a small part of them (such as a lumen) is a region.
@@ -90,8 +91,11 @@ def labeling_model():
 
 # "What to label" left empty
 EVERYTHING = """Everything of interest: outline each distinct object or structure in the image separately (for
-tissue, e.g. glands, cell nests, ducts, vessels, hair follicles, lesions; for photos, each object), skipping
-plain background, and name each with a specific term for what it is."""
+tissue, e.g. glands, cell nests, ducts, vessels, hair follicles, cysts, lesions, tissue layers; for photos,
+each object), skipping plain background. Also outline important parts inside a structure as objects of their
+own (e.g. a cyst's keratin contents, a gland's lumen), and every partly visible structure at the image's
+edges. Name each with the most specific term that fits, for tissue the standard histopathological one (e.g.
+"pseudohorn cyst", "horn cyst", "comedo", "sebaceous lobule") rather than a general description."""
 
 
 class LabelingUnavailable(RuntimeError):
