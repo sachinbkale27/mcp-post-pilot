@@ -118,10 +118,12 @@ halos, mitotic figures) with a few labelled pins (add_annotations, type "pin") o
 # time, not the next). A checklist made first, and checked at the end, keeps runs complete and alike.
 PLAN = """List everything in this image worth annotating, for someone building a labelled dataset or teaching
 from it. Look at the whole image, including its edges. Include:
-- structures and areas with edges, to outline: e.g. glands, cysts and their contents, cell nests, layers
-  such as the stratum corneum, dermal papillae, vessels, lesions;
+- compact structures and areas with clear edges, to outline: e.g. glands, cysts and their contents, cell
+  nests, the stratum corneum, dermal papillae, vessels, lesions;
 - features of cells or tissue that have no edge of their own, to pin on clear examples: e.g. melanin pigment
-  in the basal layer, perinuclear halos, mitotic figures, nuclear atypia, inflammatory cells, rete ridges.
+  in the basal layer, perinuclear halos, mitotic figures, nuclear atypia, inflammatory cells;
+- thin, curved or interlocking structures that wrap around others (rete ridges, the epidermis between
+  papillae, vessel walls): pin these too, never outline them; a box around one is mostly other tissue.
 Name each with the most specific standard term (for tissue, histopathological), never a diagnosis: a short
 label of 1 to 4 words, lower case, with no slashes, alternatives or brackets (e.g. "pseudohorn cyst", "dermal
 papilla", "perinuclear halo", "melanin pigment"), the same term for every example of a kind; put any detail in
