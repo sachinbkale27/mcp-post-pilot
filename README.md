@@ -4,6 +4,7 @@ A blogging platform with an AI assistant that manages posts through the **Model 
 
 - **Blog**: React + TypeScript UI, FastAPI REST API, PostgreSQL, and an MCP server that exposes the blog as tools, resources and prompts.
 - **Agent chat**: a multi-agent LangGraph app (OpenAI). A supervisor hands tasks to specialist agents, each an MCP client of its own server: the **Blog agent** (this blog's MCP server) and the **Genetics agent** ([genetics MCP server](https://genapi.sachin-kale.com/mcp): ClinVar, gnomAD, NCBI Gene, PubMed). Answers and every delegation and tool call stream over SSE. New agents are added in `agents.json`.
+- **Annotate images** (`agent.sachin-kale.com/#annotate`): upload an image (H&E histology included) and the **Image Annotation Agent** outlines and labels what is in it through the [Histopathology Annotation MCP server](https://github.com/sachinbkale27/label-image-mcp), with Segment Anything tracing the edges. Exports COCO, YOLO and QuPath; **Ask AI** hands the results to the genetics assistant.
 
 ```
 ┌──────────────────── Blog ─────────────────────────┐      ┌──────────────── Agent Chat ─────────────────┐
@@ -53,7 +54,7 @@ cd blog-app/frontend && npm install && npm run dev            # -> http://localh
 
 # 4. Agent API (terminal 4)
 cd agent-chat && uv venv --python 3.13 && uv pip install -r pyproject.toml
-# fill in agent-chat/.env (gitignored): OPENAI_API_KEY, OPENAI_MODEL, LANGSMITH_*
+# fill in agent-chat/.env (gitignored): OPENAI_API_KEY, OPENAI_MODEL, LANGSMITH_*; ANTHROPIC_API_KEY (optional: Claude for Annotate images)
 cd backend && ../.venv/bin/uvicorn app.main:app --port 8102
 
 # 5. Chat UI (terminal 5)
@@ -198,6 +199,33 @@ private, loopback or link-local addresses are refused, and every redirect is che
 
 Try: *"Fact-check post 12 and tell me what needs fixing"*, or *"Fact-check post 12, fix what it finds,
 and show me the changes"*. The supervisor fetches the text through the Blog agent first.
+
+## Annotate images
+
+The **Annotate images** page (`#annotate`) runs the Image Annotation Agent on one image, through the
+[Histopathology Annotation MCP server](https://github.com/sachinbkale27/label-image-mcp) (Image Label at
+labels.sachin-kale.com). The run is driven from `agent-chat/backend/app/labeling.py`:
+
+1. The image is uploaded to Image Label, and Segment Anything starts loading.
+2. `find_regions` finds the distinct objects in the image by itself, as a background job, and returns them
+   numbered with exact boxes and a picture.
+3. With **What to label** left empty, Claude first writes a **checklist** of everything worth marking:
+   structures to outline (glands, cysts, cell nests, layers, papillae) and features of cells to pin
+   (melanin pigment, perinuclear halos, mitoses), with short, consistent label names.
+4. The agent (Claude when `ANTHROPIC_API_KEY` is set, `LABEL_MODEL`, default `claude-opus-5-5`; otherwise
+   the OpenAI model) picks regions or places boxes on a pixel grid, adds a point where a box is ambiguous,
+   and lets Segment Anything trace the edges. Thin structures that wrap around others, such as rete ridges,
+   get pins rather than outlines. Each annotation carries a short note on what was seen.
+5. It checks its outlines against the image and redoes wrong ones; checklist items still unmarked get one
+   more pass. The saved annotations and COCO, YOLO and QuPath exports come back to the page.
+
+Vision models place boxes poorly (asked for glands, GPT-4o's boxes landed mostly on stroma), so the precise
+work is left to Segment Anything and the model chooses. A run takes 2 to 3 minutes.
+
+**Diagnose** streams an AI interpretation and outlines the problematic regions it describes; on normal
+tissue it says it found none. **Ask AI** hands the findings (labels, notes, extent, measurements, the
+annotated figure) to the genetics assistant, which writes the suggested questions from them.
+Both are for research and education, not diagnosis.
 
 ## How it works
 
