@@ -68,7 +68,7 @@ async def run_diagnosis(
     """Yield token events with the interpretation of one image."""
     text = "Interpret this image."
     if history.strip():
-        text += f"\n\nHistory of the specimen, from the user:\n{history.strip()}"
+        text += f"\n\nClinical history of the specimen, from the user:\n{history.strip()}"
     if other_info.strip():
         text += f"\n\nOther information from the user:\n{other_info.strip()}"
     if context.strip():

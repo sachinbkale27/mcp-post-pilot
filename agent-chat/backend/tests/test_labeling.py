@@ -51,7 +51,7 @@ def label_server(monkeypatch):
         emit({"type": "tool_call", "id": "t1", "name": "add_annotations", "input": {}, "agent": "labels", "delegation": delegation_id})
         return "Labeled one cat (approximate)."
 
-    async def no_checklist(_):  # tests that want one set their own
+    async def no_checklist(*_):  # tests that want one set their own
         raise RuntimeError("no model in tests")
 
     monkeypatch.setattr(labeling, "plan_findings", no_checklist)
@@ -251,7 +251,7 @@ async def test_outlining_everything_follows_a_checklist_and_marks_what_was_misse
         labeling.ChecklistItem(label="perinuclear halo", mark="pin", where="mid epidermis"),
     ]
 
-    async def checklist(_):
+    async def checklist(*_):
         return items
 
     monkeypatch.setattr(labeling, "plan_findings", checklist)
@@ -266,9 +266,28 @@ async def test_outlining_everything_follows_a_checklist_and_marks_what_was_misse
 
 
 async def test_named_labels_need_no_checklist(label_server, monkeypatch):
-    async def checklist(_):
+    async def checklist(*_):
         raise AssertionError("not needed")
 
     monkeypatch.setattr(labeling, "plan_findings", checklist)
     [e async for e in labeling.run_labeling(IMAGE, "Circle every cat", ["cat"], "pets", 50)]
     assert len([t for name, t in label_server if name == "agent"]) == 1
+
+
+async def test_the_specimen_history_guides_the_checklist_and_the_agent(label_server, monkeypatch):
+    seen = []
+
+    async def checklist(image_data_url, specimen=""):
+        seen.append(specimen)
+        return [labeling.ChecklistItem(label="cat", mark="outline", where="centre")]
+
+    monkeypatch.setattr(labeling, "plan_findings", checklist)
+    history, other = "Shave biopsy, cheek, 68-year-old", "lentigo or lentigo maligna?"
+    [e async for e in labeling.run_labeling(IMAGE, "", [], "path", 50, history=history, other_info=other)]
+    task = next(t for name, t in label_server if name == "agent")
+    assert "Clinical history: Shave biopsy, cheek" in seen[0] and "Other information: lentigo or" in seen[0]
+    assert "Clinical history: Shave biopsy, cheek" in task and "never mark something because the history" in task
+
+    label_server.clear()
+    [e async for e in labeling.run_labeling(IMAGE, "Circle every cat", ["cat"], "pets", 50)]
+    assert "About the specimen" not in next(t for name, t in label_server if name == "agent")

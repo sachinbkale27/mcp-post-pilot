@@ -45,7 +45,7 @@ def test_streams_the_interpretation_with_the_image_and_context(monkeypatch):
     assert "not a medical diagnosis" in system.content
     text, image = human.content
     assert "skin biopsy, back" in text["text"]
-    assert "History of the specimen, from the user:\n68-year-old, cheek" in text["text"]
+    assert "Clinical history of the specimen, from the user:\n68-year-old, cheek" in text["text"]
     assert "Other information from the user:\nlentigo maligna?" in text["text"]
     assert image["image_url"] == {"url": IMAGE["data_url"], "detail": "high"}
 

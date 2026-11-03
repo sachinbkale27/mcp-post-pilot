@@ -70,6 +70,8 @@ class LabelRequest(BaseModel):
     grid_step: int | None = Field(default=None, ge=10, le=1000)  # the model's copy has a pixel grid this far apart
     model: Literal["sam", "medsam"] = "sam"  # Segment Anything, or MedSAM for medical images
     image_id: str | None = Field(default=None, pattern=r"^[0-9a-f-]{36}$")  # add to this Image Label image
+    history: str = Field(default="", max_length=1000)  # the specimen's clinical history (optional)
+    other_info: str = Field(default="", max_length=1000)
 
     @field_validator("labels")
     @classmethod
@@ -197,6 +199,8 @@ async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
             req.grid_step,
             req.model,
             req.image_id,
+            req.history,
+            req.other_info,
         ):
             yield _sse(event)
     except LabelingUnavailable as exc:

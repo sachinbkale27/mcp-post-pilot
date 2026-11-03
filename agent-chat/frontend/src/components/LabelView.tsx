@@ -166,6 +166,8 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
         instructions: areas?.instructions ?? instructions.trim(),
         labels: areas?.labels ?? labels.split(",").map((l) => l.trim()).filter(Boolean),
         image_id: labelImageId, // add to the same Image Label image as earlier runs (e.g. its nuclei)
+        history: history.trim(),
+        other_info: otherInfo.trim(),
       };
       for await (const event of streamLabel(request, controller.signal)) {
         if (event.type === "label_result") {
@@ -517,9 +519,9 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
           </div>
 
           <div className="specimen-info">
-            <span className="label-source-title"><ClipboardList size={14} aria-hidden /> About the specimen <em>(optional, for Diagnose and Ask AI)</em></span>
+            <span className="label-source-title"><ClipboardList size={14} aria-hidden /> About the specimen <em>(optional, used by Annotate, Diagnose and Ask AI)</em></span>
             <label className="label-field">
-              <span>Tissue history</span>
+              <span>Clinical history</span>
               <textarea
                 className="label-input"
                 rows={2}
