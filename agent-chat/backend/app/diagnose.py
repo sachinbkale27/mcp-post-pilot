@@ -8,6 +8,7 @@ A second, small call then turns the interpretation into the areas to outline (a 
 event); the UI hands those to the Image Annotation Agent, so the findings are shown on the image.
 """
 
+import os
 import re
 from collections.abc import AsyncIterator
 from typing import Any
@@ -16,6 +17,17 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from .agent import _model
+from .labeling import LABEL_MODEL, structured
+
+
+def _vision_model(**kwargs):
+    """Claude when an Anthropic key is set: it reads histology far better (GPT called a solar lentigo's
+    pigmented rete ridges a lymphocytic infiltrate, twice); otherwise the OpenAI model."""
+    if os.getenv("ANTHROPIC_API_KEY"):
+        from langchain_anthropic import ChatAnthropic
+
+        return ChatAnthropic(model=LABEL_MODEL, max_tokens=4000)
+    return _model(**kwargs)
 
 PROMPT = """You interpret images for research and education, in the way a pathologist or radiologist would
 describe them to a colleague. You are not diagnosing a patient: you never see the clinical history, and a
@@ -55,7 +67,7 @@ async def run_diagnosis(image: dict[str, str], context: str = "") -> AsyncIterat
             {"type": "image_url", "image_url": {"url": image["data_url"], "detail": "high"}},
         ]
     )
-    model = _model(streaming=True)
+    model = _vision_model(streaming=True)
     answer: list[str] = []
     async for chunk in model.astream([SystemMessage(PROMPT), message]):
         if chunk.text:
@@ -114,7 +126,7 @@ class Regions(BaseModel):
 
 async def extract_regions(interpretation: str, image_data_url: str) -> Regions:
     """The problematic regions, chosen from the interpretation and checked against the image itself."""
-    model = _model().with_structured_output(Regions)
+    model = structured(_vision_model(), Regions)
     message = HumanMessage(
         [
             {"type": "text", "text": f"Interpretation of the attached image:\n\n{interpretation}"},

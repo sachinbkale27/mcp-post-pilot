@@ -103,6 +103,13 @@ def labeling_model():
     return _model(disable_streaming=True)
 
 
+def structured(model, schema):
+    """The model answering in the schema; Claude Opus 5.5 rejects the forced tool call langchain uses by default."""
+    if type(model).__name__ == "ChatAnthropic":
+        return model.with_structured_output(schema, method="json_schema")
+    return model.with_structured_output(schema)
+
+
 # "What to label" left empty
 EVERYTHING = """Everything of interest: outline each distinct object or structure in the image separately (for
 tissue, e.g. glands, cell nests, ducts, vessels, hair follicles, cysts, lesions, tissue layers; for photos,
@@ -150,7 +157,7 @@ class Checklist(BaseModel):
 
 async def plan_findings(image_data_url: str) -> list[ChecklistItem]:
     """The checklist of what to mark in an image, made by looking at it before annotating."""
-    model = labeling_model().with_structured_output(Checklist)
+    model = structured(labeling_model(), Checklist)
     message = HumanMessage([
         {"type": "image_url", "image_url": {"url": image_data_url}},
         {"type": "text", "text": "List what to annotate in this image."},

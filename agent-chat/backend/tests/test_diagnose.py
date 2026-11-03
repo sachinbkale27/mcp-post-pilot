@@ -1,4 +1,4 @@
-"""The Diagnose button's endpoint, with a scripted model (no OpenAI calls)."""
+"""The Diagnose button's endpoint, with a scripted model (no model calls)."""
 
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessageChunk
@@ -21,7 +21,7 @@ class FakeModel:
 
 def test_streams_the_interpretation_with_the_image_and_context(monkeypatch):
     model = FakeModel()
-    monkeypatch.setattr(diagnose, "_model", lambda **kwargs: model)
+    monkeypatch.setattr(diagnose, "_vision_model", lambda **kwargs: model)
     seen = []
 
     async def fake_regions(text, image_data_url):
@@ -54,7 +54,7 @@ def test_errors_end_the_stream_cleanly(monkeypatch):
             raise RuntimeError("model down")
             yield
 
-    monkeypatch.setattr(diagnose, "_model", lambda **kwargs: Broken())
+    monkeypatch.setattr(diagnose, "_vision_model", lambda **kwargs: Broken())
     with TestClient(main.app) as client:
         body = client.post("/diagnose", json={"image": IMAGE}).text
     assert "event: error" in body and "model down" in body and "event: done" in body
@@ -67,3 +67,11 @@ def test_short_label_keeps_short_terms_and_trims_long_ones():
     long = "sheets of atypical epithelioid cells (with prominent nucleoli and abundant eosinophilic cytoplasm)"
     assert short_label(long) == "sheets of atypical epithelioid cells"
     assert len(short_label("word " * 30)) <= 70
+
+
+def test_diagnose_uses_claude_when_an_anthropic_key_is_set(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+    assert type(diagnose._vision_model()).__name__ == "ChatOpenAI"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    assert type(diagnose._vision_model(streaming=True)).__name__ == "ChatAnthropic"
