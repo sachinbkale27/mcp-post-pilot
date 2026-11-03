@@ -154,13 +154,15 @@ class WarmupRequest(BaseModel):
 class DiagnoseRequest(BaseModel):
     image: ChatImage
     context: str = Field(default="", max_length=2000)
+    history: str = Field(default="", max_length=1000)  # about the specimen: site, age, duration, appearance
+    other_info: str = Field(default="", max_length=1000)  # anything else: prior diagnoses, the clinical question
 
 
 @app.post("/diagnose", response_class=EventSourceResponse)
 async def diagnose(req: DiagnoseRequest) -> AsyncIterable[ServerSentEvent]:
     """Stream an AI interpretation of one image (research and education, not a diagnosis)."""
     try:
-        async for event in run_diagnosis(req.image.model_dump(), req.context):
+        async for event in run_diagnosis(req.image.model_dump(), req.context, req.history, req.other_info):
             yield _sse(event)
     except Exception as exc:
         yield _sse({"type": "error", "message": _error_message(exc)})

@@ -54,6 +54,8 @@ class ResultsHandoff(BaseModel):
     figure_url: str | None = Field(None, max_length=500, pattern=r"^https://[\w.-]+(/[\w./%-]*)?$")
     image_name: str = Field("", max_length=200)
     request: str = Field("", max_length=500)  # what the user asked to label ("" for everything)
+    history: str = Field("", max_length=1000)  # what the user said about the specimen
+    other_info: str = Field("", max_length=1000)
     suspected_diagnosis: str = Field("", max_length=200)
     findings: list[Finding] = Field(default_factory=list, max_length=20)
     nuclei: Nuclei | None = None

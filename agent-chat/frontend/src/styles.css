@@ -665,9 +665,9 @@ select.label-input:disabled, .label-input:disabled { opacity: 0.6; }
 .faq-tag.need { border-color: var(--accent); color: var(--accent); }
 
 /* ---- histology tools ---- */
-.histology-tools { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
-.histology-tools .label-source-title { display: flex; align-items: center; gap: 6px; }
-.histology-tools .label-source-title em { color: var(--text-3); font-style: normal; font-weight: 400; }
+.histology-tools, .specimen-info { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.histology-tools .label-source-title, .specimen-info .label-source-title { display: flex; align-items: center; gap: 6px; }
+.histology-tools .label-source-title em, .specimen-info .label-source-title em { color: var(--text-3); font-style: normal; font-weight: 400; }
 .histology-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
 .histology-normalized { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--text-2); font-size: 13px; }
 .nuclei-summary { margin: 8px 0 0; color: var(--text-2); font-size: 13.5px; }

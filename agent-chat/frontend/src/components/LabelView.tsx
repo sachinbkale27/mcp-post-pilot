@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CircleAlert, CircleCheck, Shapes, Download, FlaskConical, PenTool, Sparkles, SquareArrowOutUpRight, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
+import { CircleAlert, CircleCheck, ClipboardList, Shapes, Download, FlaskConical, PenTool, Sparkles, SquareArrowOutUpRight, Gauge, ImagePlus, Link2, LoaderCircle, Microscope, Palette, RotateCcw, ScanSearch, Square, Stethoscope, Tag, TriangleAlert, Undo2 } from "lucide-react";
 import {
   BLOG_URL, GENETICS_URL, fetchImageFromUrl, handOffResults, shareToImageLabel, streamDiagnosis, streamLabel, streamPathology, uploadImage, warmUpLabeling,
   type AgentEvent, type Annotation, type DiagnosisRegion, type LabelResult, type NucleiSummary, type PathologyAction, type QualityResult,
@@ -68,6 +68,9 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
   const [labels, setLabels] = useState("");
   const [model, setModel] = useState<Model>("sam");
   const [imageUrl, setImageUrl] = useState("");
+  // About the specimen, for Diagnose and Ask AI (optional)
+  const [history, setHistory] = useState("");
+  const [otherInfo, setOtherInfo] = useState("");
   const [diagnosis, setDiagnosis] = useState<Diagnosis>();
   const diagnoseAbort = useRef<AbortController | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -106,7 +109,11 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     setLabelImageId(undefined);
     setLastQuality(undefined);
     setLastNuclei(undefined);
-    if (!keepOriginal) setOriginal(undefined);
+    if (!keepOriginal) {
+      setOriginal(undefined);
+      setHistory(""); // a new specimen
+      setOtherInfo("");
+    }
     diagnoseAbort.current?.abort();
     setDiagnosis(undefined);
     setUpload({ name: file.name, status: "processing" });
@@ -269,6 +276,8 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
         figure_url: figureUrl,
         image_name: (upload?.name ?? "").slice(0, 200),
         request: instructions.trim().slice(0, 500),
+        history: history.trim().slice(0, 1000),
+        other_info: otherInfo.trim().slice(0, 1000),
         suspected_diagnosis: (diagnosis?.suspected ?? "").slice(0, 200),
         findings: [...counts].slice(0, 20).map(([label, count]) => {
           const shapes = byLabel.get(label) ?? [];
@@ -320,7 +329,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
     setDiagnosis({ text: "", pending: true });
     let found: Extract<AgentEvent, { type: "diagnosis_regions" }> | undefined;
     try {
-      const request = { image: { url: upload.url, data_url: upload.preview, name: upload.name }, context: instructions };
+      const request = { image: { url: upload.url, data_url: upload.preview, name: upload.name }, context: instructions, history, other_info: otherInfo };
       for await (const event of streamDiagnosis(request, controller.signal)) {
         if (event.type === "token") setDiagnosis((d) => d && { ...d, text: d.text + event.text });
         else if (event.type === "diagnosis_regions") {
@@ -505,6 +514,35 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
                 <button className="link-btn" onClick={restoreOriginal} disabled={busy}><Undo2 size={13} aria-hidden /> Back to the original</button>
               </p>
             )}
+          </div>
+
+          <div className="specimen-info">
+            <span className="label-source-title"><ClipboardList size={14} aria-hidden /> About the specimen <em>(optional, for Diagnose and Ask AI)</em></span>
+            <label className="label-field">
+              <span>Tissue history</span>
+              <textarea
+                className="label-input"
+                rows={2}
+                maxLength={1000}
+                value={history}
+                placeholder="e.g. Shave biopsy, cheek, 68-year-old; flat brown patch growing for 5 years"
+                onChange={(e) => setHistory(e.target.value)}
+                disabled={busy}
+              />
+            </label>
+            <label className="label-field">
+              <span>Other information</span>
+              <textarea
+                className="label-input"
+                rows={2}
+                maxLength={1000}
+                value={otherInfo}
+                placeholder="e.g. Prior melanoma on the back; clinical question: lentigo or lentigo maligna?"
+                onChange={(e) => setOtherInfo(e.target.value)}
+                disabled={busy}
+              />
+            </label>
+            <small className="label-hint">Site, age, how long it has been there, how it looks, earlier diagnoses. Leave out names, dates of birth and record numbers.</small>
           </div>
 
           <div className="label-actions">

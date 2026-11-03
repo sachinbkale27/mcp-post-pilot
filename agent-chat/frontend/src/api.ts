@@ -229,6 +229,8 @@ export interface ResultsHandoff {
   figure_url?: string; // the annotated figure, uploaded for the handoff
   image_name: string;
   request: string; // what the user asked to label ("" for everything)
+  history: string; // what the user said about the specimen
+  other_info: string;
   suspected_diagnosis: string;
   findings: {
     label: string;
@@ -282,7 +284,7 @@ export function streamPathology(
 }
 
 /** Stream an AI interpretation of one image (token events; research and education, not a diagnosis). */
-export function streamDiagnosis(request: { image: ChatImage; context: string }, signal: AbortSignal): AsyncGenerator<AgentEvent> {
+export function streamDiagnosis(request: { image: ChatImage; context: string; history: string; other_info: string }, signal: AbortSignal): AsyncGenerator<AgentEvent> {
   return streamEvents("/diagnose", request, signal);
 }
 
