@@ -13,4 +13,5 @@ dependencies = [
     "uvicorn[standard]",
     "boto3",
     "python-dotenv",
+    "pyjwt[crypto]",  # the Auth Security agent decodes and verifies JWTs
 ]

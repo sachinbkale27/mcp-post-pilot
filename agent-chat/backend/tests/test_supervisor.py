@@ -144,7 +144,7 @@ def test_shipped_agents_json_is_valid(monkeypatch):
     entries = json.loads(path.read_text())
     monkeypatch.delenv("LABELS_MCP_URL", raising=False)
     monkeypatch.delenv("LABELS_MCP_TOKEN", raising=False)
-    assert [a.name for a in parse_agents(entries, path.parent)] == ["blog", "genetics", "factcheck", "trials", "drugs"]  # labels not provisioned
+    assert [a.name for a in parse_agents(entries, path.parent)] == ["blog", "genetics", "factcheck", "trials", "drugs", "auth"]  # labels not provisioned
 
     monkeypatch.setenv("LABELS_MCP_URL", "https://labels.test/mcp")
     monkeypatch.setenv("LABELS_MCP_TOKEN", "tok")
@@ -174,3 +174,16 @@ def test_attachments_get_absolute_urls_for_agents_that_download_them():
     assert "https://blog.test/media/a.png" in message.content[0]["text"]
     assert message.content[1]["image_url"]["url"] == "data:image/png;base64,x"
     assert "blog.test" not in task_message(BLOG, "t", "u", [{"url": "/media/a.png", "data_url": "d"}]).content
+
+
+def test_an_agent_can_ask_for_claude(monkeypatch, tmp_path):
+    (tmp_path / "p.md").write_text("prompt")
+    entry = {"name": "auth", "description": "d", "mcp_url": "local:auth", "prompt_file": "p.md", "model": "claude"}
+    [spec] = parse_agents([entry], tmp_path)
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert type(agent.specialist_model(spec)).__name__ == "ChatOpenAI"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    assert type(agent.specialist_model(spec)).__name__ == "ChatAnthropic"
+    [plain] = parse_agents([{**entry, "model": ""}], tmp_path)
+    assert type(agent.specialist_model(plain)).__name__ == "ChatOpenAI"

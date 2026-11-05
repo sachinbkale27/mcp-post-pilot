@@ -26,7 +26,7 @@ def _vision_model(**kwargs):
     if os.getenv("ANTHROPIC_API_KEY"):
         from langchain_anthropic import ChatAnthropic
 
-        return ChatAnthropic(model=LABEL_MODEL, max_tokens=4000)
+        return ChatAnthropic(model=LABEL_MODEL, max_tokens=16000)  # its thinking counts toward max_tokens
     return _model(**kwargs)
 
 PROMPT = """You interpret images for research and education, in the way a pathologist or radiologist would

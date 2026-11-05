@@ -8,7 +8,8 @@ from importlib import import_module
 
 from mcp.server.mcpserver import MCPServer
 
-SERVERS = {"research": "app.local_mcp.research", "trials": "app.local_mcp.trials", "drugs": "app.local_mcp.drugs"}
+SERVERS = {"research": "app.local_mcp.research", "trials": "app.local_mcp.trials", "drugs": "app.local_mcp.drugs",
+           "auth": "app.local_mcp.auth"}
 
 
 def local_server(name: str) -> MCPServer:

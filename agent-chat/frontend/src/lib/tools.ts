@@ -2,7 +2,7 @@
 import type { Trial } from "../api";
 import {
   BookOpen, ChartColumn, ClipboardList, FlaskConical, MapPin, Dna, Eraser, FileDown, FilePen, FilePlus2, FileSearch, FileText, Globe, ImageUp, Images, Library, Link2, List,
-  type LucideIcon, Microscope, PenTool, Replace, ScanSearch, SearchCheck, Send, Tags, Trash2, Undo2, WandSparkles, Wrench,
+  KeyRound, type LucideIcon, Microscope, ShieldCheck, PenTool, Replace, ScanSearch, SearchCheck, Send, Tags, Trash2, Undo2, WandSparkles, Wrench,
 } from "lucide-react";
 
 export type ToolKind = "read" | "write" | "destructive";
@@ -128,6 +128,22 @@ const TOOLS: Record<string, ToolMeta> = {
     kind: "read", icon: ClipboardList,
     running: (a) => `Filing ${count(a.trials, "trial")}`,
     done: (a) => `Filed ${count(a.trials, "trial")}`,
+  },
+  // auth MCP server (Auth Security agent); never shows the token itself
+  check_identity_provider: {
+    kind: "read", icon: ShieldCheck,
+    running: (a) => `Checking the identity provider at ${site(a.issuer)}`,
+    done: (a) => `Checked the identity provider at ${site(a.issuer)}`,
+  },
+  inspect_jwt: {
+    kind: "read", icon: KeyRound,
+    running: (a) => (a.issuer ? `Verifying a token against ${site(a.issuer)}` : "Inspecting a token"),
+    done: (a) => (a.issuer ? `Verified a token against ${site(a.issuer)}` : "Inspected a token"),
+  },
+  check_security_headers: {
+    kind: "read", icon: Globe,
+    running: (a) => `Checking the security headers of ${site(a.url)}`,
+    done: (a) => `Checked the security headers of ${site(a.url)}`,
   },
   // research MCP server (fact-check agent)
   web_search: {

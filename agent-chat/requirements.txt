@@ -159,7 +159,9 @@ pydantic==2.14.1
 pydantic-core==2.50.1
     # via pydantic
 pyjwt==2.15.1
-    # via mcp
+    # via
+    #   agent-chat (pyproject.toml)
+    #   mcp
 python-dateutil==2.9.0.post0
     # via botocore
 python-dotenv==1.2.4

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Dna, FlaskConical, ImagePlus, ListChecks, MapPin, Menu, Microscope, SearchCheck, Sparkles, Target, WandSparkles } from "lucide-react";
+import { Dna, FlaskConical, ImagePlus, ListChecks, MapPin, Menu, Microscope, SearchCheck, ShieldCheck, Sparkles, Target, WandSparkles } from "lucide-react";
 import { BLOG_URL, getAgents, resetChat, streamChat, uploadImage, type AgentsInfo } from "./api";
 import { Composer, MAX_ATTACHMENTS, type Attachment } from "./components/Composer";
 import { prepareImage } from "./lib/images";
@@ -18,6 +18,10 @@ const SUGGESTIONS = [
     prompt: "Research the CFTR F508del variant (ClinVar classification, what CFTR does, one recent paper on CFTR modulators), then write a short draft blog post about it with the sources, by sachin.",
   },
   { icon: SearchCheck, title: "Fact-check a post", prompt: "Fact-check the latest published post and tell me what, if anything, needs fixing." },
+  {
+    icon: ShieldCheck, title: "Secure an app",
+    prompt: "Plan Cognito sign-in for my React + FastAPI app on AWS Lambda: only signed-in users can call /api/*, and only admins can delete posts.",
+  },
 ];
 
 const IMAGE_ONLY_PROMPT = "Here are some images.";
@@ -292,6 +296,9 @@ export function App() {
                   : null}
                 {info?.agents.some((a) => a.name === "trials")
                   ? ", the Clinical Trials agent finds trials in the ClinicalTrials.gov registry"
+                  : null}
+                {info?.agents.some((a) => a.name === "auth")
+                  ? ", the Auth Security agent plans OAuth sign-in and JWT checks for your apps"
                   : null}
                 {info?.agents.some((a) => a.name === "drugs") ? (
                   <>

@@ -42,6 +42,11 @@ export interface Turn {
   pending: boolean;
 }
 
+/** A pasted token (e.g. for the Auth Security agent's inspect_jwt) isn't shown again in the step details. */
+function hideTokens(key: string, value: unknown) {
+  return key === "token" && typeof value === "string" ? `${value.slice(0, 6)}… (hidden)` : value;
+}
+
 export function UserMessage({ text, images }: { text: string; images: Turn["images"] }) {
   return (
     <div className="msg-user">
@@ -97,7 +102,7 @@ function ToolCard({ step }: { step: ToolStep }) {
       {open && (
         <div className="tool-body">
           <div className="tool-io-label">tools/call <span className="mono">{step.name}</span> · arguments</div>
-          <pre>{JSON.stringify(step.input, null, 2)}</pre>
+          <pre>{JSON.stringify(step.input, hideTokens, 2)}</pre>
           <div className="tool-io-label">{step.isError ? "error" : "result"}</div>
           <pre className={step.isError ? "err" : undefined}>
             {running ? "Waiting for the MCP server…" : typeof step.output === "string" ? step.output : JSON.stringify(step.output, null, 2)}

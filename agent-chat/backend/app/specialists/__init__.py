@@ -12,6 +12,7 @@ agents.json (path overridable with AGENTS_CONFIG); adding an agent means adding 
     headers      extra HTTP headers for its MCP server, e.g. a shared secret; empty values are dropped
     prompt_file  its instructions, relative to agents.json
     images       whether it sees images the user attaches (default false)
+    model        "claude" to run it on Claude when ANTHROPIC_API_KEY is set (default: the OpenAI model)
     report_tool  a tool of its MCP server that must accept the agent's result (e.g. one that validates it);
                  its output becomes the report the supervisor sees
     attachment_base_url
@@ -46,6 +47,7 @@ class AgentSpec:
     images: bool = False
     attachment_base_url: str = ""
     report_tool: str = ""
+    model: str = ""  # "claude": Claude when an Anthropic key is set
     forward_viewer: bool = False  # send the visitor's place (app/viewer.py) to this server, for its usage counts
 
     @property
@@ -79,6 +81,7 @@ def parse_agents(entries: list[dict], base_dir: Path) -> tuple[AgentSpec, ...]:
                 attachment_base_url=_expand(entry.get("attachment_base_url", "")).rstrip("/"),
                 report_tool=entry.get("report_tool", ""),
                 forward_viewer=bool(entry.get("forward_viewer", False)),
+                model=entry.get("model", ""),
             )
         )
     if not specs:

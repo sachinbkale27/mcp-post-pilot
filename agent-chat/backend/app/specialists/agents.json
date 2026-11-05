@@ -54,5 +54,13 @@
     "mcp_url": "${DRUGS_MCP_URL:-local:drugs}",
     "prompt_file": "prompts/drugs.md",
     "report_tool": "submit_drug_info"
+  },
+  {
+    "name": "auth",
+    "title": "Auth Security agent",
+    "description": "Designs and reviews sign-in and API security for apps: OAuth 2.0 / OpenID Connect login (authorization code with PKCE), JWT access tokens and how an API validates them, sessions and cookies, roles and scopes, and OAuth for MCP servers. Produces a step-by-step plan with code for the app's stack (e.g. React, FastAPI, Express, Next.js), identity provider and infrastructure setup (e.g. Cognito, Auth0, Okta, Entra ID, API Gateway authorizers) and tests. Checks an identity provider's configuration, decodes and verifies a JWT, and checks a site's security headers and cookie flags. It can't change code or settings itself. Give it the app's stack, its identity provider if any, and what should be protected.",
+    "mcp_url": "${AUTH_MCP_URL:-local:auth}",
+    "prompt_file": "prompts/auth.md",
+    "model": "claude"
   }
 ]
