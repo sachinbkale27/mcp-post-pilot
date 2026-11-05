@@ -230,7 +230,9 @@ Both are for research and education, not diagnosis.
 ## How it works
 
 Step-by-step sequence diagrams for every flow (blog CRUD, agent tool calls, error recovery, memory,
-deploys) are in [USECASES.md](USECASES.md).
+deploys) are in [USECASES.md](USECASES.md). How the supervisor and the specialist agents talk to each other
+(delegation, reports, fact-check before publishing, hand-offs) is in
+[docs/agent-communication.md](docs/agent-communication.md).
 
 1. **Transport.** The server speaks MCP over *Streamable HTTP*: JSON-RPC 2.0 messages POSTed to one
    endpoint (`/mcp`), with responses returned as JSON or an SSE stream. (The other standard transport is

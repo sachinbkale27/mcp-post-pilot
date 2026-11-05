@@ -1,0 +1,28 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant SUP as Supervisor (LangGraph)
+    participant LLM as OpenAI
+    participant GEN as Genetics agent
+    participant GMCP as Genetics MCP server
+    participant BLOG as Blog agent
+    participant BMCP as Blog MCP server
+
+    User->>SUP: "Research CFTR F508del, then draft a post about it"
+    SUP->>LLM: history + message + tools ask_blog, ask_genetics, ...
+    LLM-->>SUP: tool_call ask_genetics {task: "Look up F508del in ClinVar, what CFTR does, one recent paper"}
+    SUP->>GEN: task + the user's message
+    GEN->>GMCP: tools/list, then tools/call (ClinVar, NCBI Gene, PubMed)
+    GMCP-->>GEN: results
+    GEN-->>SUP: report (ids, findings, links)
+
+    SUP->>LLM: messages + genetics report
+    LLM-->>SUP: tool_call ask_blog {task: "Draft a post with these findings and sources: ..."}
+    SUP->>BLOG: task (with the genetics findings written in) + the user's message
+    BLOG->>BMCP: tools/call create_post
+    BMCP-->>BLOG: {id: 12, status: draft}
+    BLOG-->>SUP: report "Drafted post 12 ..."
+
+    SUP->>LLM: messages + blog report
+    LLM-->>SUP: streamed answer from both reports
+    SUP-->>User: tokens, plus every delegation and tool call, over SSE

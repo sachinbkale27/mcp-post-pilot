@@ -33,6 +33,10 @@ header. The diagrams leave it out except in [use case 7](#7-blocked-requests).
 The diagrams are SVG images rendered from Mermaid sources in [`docs/diagrams/`](docs/diagrams).
 After editing a `.mmd` file, regenerate the images with `docs/diagrams/render.sh`.
 
+These diagrams show the agent working with the blog's MCP server. For the multi-agent flows (the supervisor
+delegating to specialist agents, and the fact-check required before publishing), see
+[docs/agent-communication.md](docs/agent-communication.md).
+
 ---
 
 ## 1. Manage a post in the blog UI

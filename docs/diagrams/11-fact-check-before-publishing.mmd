@@ -1,0 +1,29 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant SUP as Supervisor
+    participant FC as Fact-check agent
+    participant RS as Research MCP server
+    participant BLOG as Blog agent
+    participant API as Blog API
+
+    User->>SUP: "Publish post 12"
+    SUP->>FC: ask_factcheck {task: "Check post 12"}
+    FC->>RS: read_post 12
+    RS->>API: GET /posts/12
+    API-->>RS: title + text (RS keeps their hash)
+    FC->>RS: web_search, fetch_page (sources)
+    FC->>RS: submit_report {claims, verdicts, quotes, post_id: 12}
+    Note over RS: Every "supported" verdict must quote a page fetched in this session
+    RS->>API: POST /posts/12/fact-check {hash, time, report, signature}
+    Note over API: Checks the signature (key only the site's services know) and that the hash matches the text now
+    API-->>RS: recorded
+    RS-->>FC: report + "Recorded on post 12"
+    FC-->>SUP: per-claim table, recorded
+
+    SUP->>BLOG: ask_blog {task: "Publish post 12"}
+    BLOG->>API: POST /posts/12/publish (through the Blog MCP server)
+    Note over API: Publishes only if the recorded hash still matches the title and text
+    API-->>BLOG: published
+    BLOG-->>SUP: report
+    SUP-->>User: answer with the fact-check table
