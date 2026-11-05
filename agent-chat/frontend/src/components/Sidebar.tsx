@@ -1,8 +1,8 @@
-import { BookText, Bot, FileCode2, FlaskConical, MessageSquarePlus, MessagesSquare, Network, PanelLeftClose, Pill, ScanSearch, SquareArrowOutUpRight } from "lucide-react";
+import { BookText, Bot, FileCode2, FlaskConical, MessageSquarePlus, MessagesSquare, Network, PanelLeftClose, Pill, ScanSearch, ShieldCheck, SquareArrowOutUpRight } from "lucide-react";
 import { BLOG_URL, type AgentInfo, type AgentsInfo } from "../api";
 import { toolMeta } from "../lib/tools";
 
-export type View = "chat" | "label" | "trials" | "medicines";
+export type View = "chat" | "label" | "trials" | "medicines" | "security";
 
 interface Props {
   info?: AgentsInfo;
@@ -13,6 +13,7 @@ interface Props {
   labelingAvailable: boolean;
   trialsAvailable: boolean;
   medicinesAvailable: boolean;
+  securityAvailable: boolean;
   onViewChange: (view: View) => void;
   onNewChat: () => void;
   onRetry: () => void;
@@ -85,7 +86,7 @@ function AgentPanel({ agent, defaultOpen }: { agent: AgentInfo; defaultOpen: boo
   );
 }
 
-export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, trialsAvailable, medicinesAvailable, onViewChange, onNewChat, onRetry, onClose }: Props) {
+export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, trialsAvailable, medicinesAvailable, securityAvailable, onViewChange, onNewChat, onRetry, onClose }: Props) {
   const online = info?.agents.filter((a) => a.online).length ?? 0;
   const status = infoError ? "offline" : info ? (online === info.agents.length ? "online" : "partial") : "connecting";
 
@@ -119,6 +120,11 @@ export function Sidebar({ info, infoError, busy, open, view, labelingAvailable, 
         {medicinesAvailable && (
           <button className={view === "medicines" ? "active" : undefined} onClick={() => onViewChange("medicines")} aria-current={view === "medicines" ? "page" : undefined}>
             <Pill size={16} aria-hidden /> Medicines
+          </button>
+        )}
+        {securityAvailable && (
+          <button className={view === "security" ? "active" : undefined} onClick={() => onViewChange("security")} aria-current={view === "security" ? "page" : undefined}>
+            <ShieldCheck size={16} aria-hidden /> App Security
           </button>
         )}
       </nav>

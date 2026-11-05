@@ -770,3 +770,7 @@ a.label-download { text-decoration: none; }
 
 .cell-types-note { display: block; margin-top: 4px; color: var(--text-3); font-size: 12px; }
 .cell-types-warning { color: var(--warn, #b45309); font-weight: 500; }
+
+/* App Security: three goals side by side, stacked on narrow screens */
+.segmented.security-goals { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 520px) { .segmented.security-goals { grid-template-columns: 1fr; } }

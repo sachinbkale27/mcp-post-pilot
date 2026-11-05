@@ -1,4 +1,4 @@
-"""Run one specialist directly for a page of the chat UI (Clinical Trials, Medicines).
+"""Run one specialist directly for a page of the chat UI (Clinical Trials, Medicines, App Security).
 
 These pages build the question from a form, so the agent is called directly rather than through the
 supervisor. Events use the chat's SSE format (agent_start, tool_call, tool_result, agent_end), and a final
@@ -10,7 +10,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from .agent import _model
+from .agent import specialist_model
 from .specialists import AgentSpec, load_agents
 from .specialists.runner import run_specialist
 
@@ -38,7 +38,7 @@ async def run_view_agent(spec: AgentSpec, task: str, user_text: str, report_even
         try:
             report = await run_specialist(
                 spec,
-                model=_model(disable_streaming=True),
+                model=specialist_model(spec),  # Claude for agents that ask for it
                 task=task,
                 user_text=user_text,
                 images=[],

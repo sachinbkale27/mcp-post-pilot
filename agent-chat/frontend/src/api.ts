@@ -62,6 +62,7 @@ export type AgentEvent =
   | { type: "diagnosis_regions"; medical: boolean; regions: DiagnosisRegion[]; diagnosis: string; lesion_area: string }
   | { type: "trials_report"; report: string }
   | { type: "drug_report"; report: string }
+  | { type: "security_report"; report: string }
   | { type: "error"; message: string }
   | { type: "done" };
 
@@ -214,6 +215,12 @@ export function streamLabel(
 /** Run the Clinical Trials agent on one search; the trials are in its submit_trials result. */
 export function streamTrials(request: { question: string; person: string }, signal: AbortSignal): AsyncGenerator<AgentEvent> {
   return streamEvents("/trials", request, signal);
+}
+
+/** Run the Auth Security agent on one request (and an optional test token, sent but never shown); its plan is
+ * the security_report event. */
+export function streamSecurity(request: { question: string; token: string }, signal: AbortSignal): AsyncGenerator<AgentEvent> {
+  return streamEvents("/security", request, signal);
 }
 
 /** Run the Drug Information agent on one question; its answer is the drug_report event. */

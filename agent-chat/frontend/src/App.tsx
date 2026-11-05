@@ -7,6 +7,7 @@ import { AgentTurn, UserMessage, type Turn } from "./components/Messages";
 import { applyEvent } from "./lib/events";
 import { LabelView } from "./components/LabelView";
 import { MedicinesView } from "./components/MedicinesView";
+import { SecurityView } from "./components/SecurityView";
 import { TrialsView } from "./components/TrialsView";
 import { Brand, Sidebar, type View } from "./components/Sidebar";
 
@@ -63,10 +64,11 @@ const TRIAL_EXAMPLES = [
   },
 ];
 
-const HASHES: Record<string, View> = { "#annotate": "label", "#label": "label", "#trials": "trials", "#medicines": "medicines" };
+const HASHES: Record<string, View> = { "#annotate": "label", "#label": "label", "#trials": "trials", "#medicines": "medicines", "#security": "security" };
 
-/** #annotate (or the earlier #label) opens the annotation view, #trials the clinical trials search, #medicines the drug information. */
-const VIEW_TITLES: Partial<Record<View, string>> = { label: "Annotate Images", trials: "Clinical Trials", medicines: "Medicines" };
+/** #annotate (or the earlier #label) opens the annotation view, #trials the clinical trials search, #medicines the drug
+ * information, #security the Auth Security agent. */
+const VIEW_TITLES: Partial<Record<View, string>> = { label: "Annotate Images", trials: "Clinical Trials", medicines: "Medicines", security: "App Security" };
 
 function viewFromHash(): View {
   return HASHES[location.hash] ?? "chat";
@@ -92,6 +94,8 @@ export function App() {
   const trialsAgent = info?.agents.find((a) => a.name === "trials");
   const [lookingUpMedicine, setLookingUpMedicine] = useState(false);
   const drugsAgent = info?.agents.find((a) => a.name === "drugs");
+  const [checkingSecurity, setCheckingSecurity] = useState(false);
+  const authAgent = info?.agents.find((a) => a.name === "auth");
   const labelsAgent = info?.agents.find((a) => a.name === "labels");
 
   // #annotate opens the annotation view, so it can be linked to and survives a reload
@@ -198,6 +202,7 @@ export function App() {
         labelingAvailable={!!labelsAgent}
         trialsAvailable={!!trialsAgent}
         medicinesAvailable={!!drugsAgent}
+        securityAvailable={!!authAgent}
         onViewChange={openView}
         onNewChat={() => { newChat(); openView("chat"); }}
         onRetry={loadInfo}
@@ -264,6 +269,19 @@ export function App() {
           />
         </div>
 
+        <div className="scroll" hidden={view !== "security"}>
+          <SecurityView
+            available={!info || !!authAgent?.online}
+            unavailableReason={
+              !authAgent
+                ? "The Auth Security agent isn't configured on this server."
+                : `The Auth Security agent is offline${authAgent.error ? `: ${authAgent.error}` : "."}`
+            }
+            busy={checkingSecurity}
+            onBusyChange={setCheckingSecurity}
+          />
+        </div>
+
         <div
           className="scroll"
           hidden={view !== "chat"}
@@ -297,9 +315,12 @@ export function App() {
                 {info?.agents.some((a) => a.name === "trials")
                   ? ", the Clinical Trials agent finds trials in the ClinicalTrials.gov registry"
                   : null}
-                {info?.agents.some((a) => a.name === "auth")
-                  ? ", the Auth Security agent plans OAuth sign-in and JWT checks for your apps"
-                  : null}
+                {info?.agents.some((a) => a.name === "auth") ? (
+                  <>
+                    , the Auth Security agent plans OAuth sign-in and JWT checks for your apps (try{" "}
+                    <a href="#security" onClick={(e) => { e.preventDefault(); openView("security"); }}>App Security</a>)
+                  </>
+                ) : null}
                 {info?.agents.some((a) => a.name === "drugs") ? (
                   <>
                     , and the Drug Information agent explains medicines from their FDA labels (try{" "}

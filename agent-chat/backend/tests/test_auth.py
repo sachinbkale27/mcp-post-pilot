@@ -223,3 +223,26 @@ def test_security_headers_and_cookie_flags(monkeypatch):
     assert any("'unsafe-inline'" in f for f in found) and not any(
         "No Strict-Transport-Security" in f for f in found
     )
+
+
+def test_security_endpoint_sends_the_token_to_the_agent_but_never_back(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app import main, security_plan
+
+    seen = {}
+
+    async def fake_view_agent(spec, task, user_text, report_event):
+        seen.update(task=task, user_text=user_text, report_event=report_event)
+        yield {"type": "agent_start", "id": "d1", "agent": "auth", "title": "Auth Security agent", "task": user_text}
+        yield {"type": report_event, "report": "## Plan\nUse PKCE."}
+
+    monkeypatch.setattr(security_plan, "run_view_agent", fake_view_agent)
+    monkeypatch.setattr(security_plan, "view_agent", lambda name, title: object())
+    jwt_text = token()
+    with TestClient(main.app) as client:
+        body = client.post("/security", json={"question": "Plan Cognito sign-in for my FastAPI API.", "token": "Bearer " + jwt_text}).text
+        bad = client.post("/security", json={"question": "Plan Cognito sign-in for my FastAPI API.", "token": "<script>"})
+    assert "event: security_report" in body and "Use PKCE" in body and body.rstrip().endswith("data: {}")
+    assert jwt_text in seen["task"] and jwt_text not in seen["user_text"] and jwt_text not in body
+    assert bad.status_code == 422

@@ -18,6 +18,7 @@ from .labeling import LabelingUnavailable, run_labeling, share_link, warm_up
 from .pathology import PathologyError, run_pathology
 from .handoff import HandoffError, ResultsHandoff, hand_off
 from .drugs_search import run_drugs
+from .security_plan import run_security
 from .trials_search import TrialsUnavailable, run_trials
 from .view_agents import AgentUnavailable
 from .origin import OriginSecretMiddleware
@@ -97,6 +98,11 @@ class TrialsRequest(BaseModel):
 
 class DrugsRequest(BaseModel):
     question: str = Field(min_length=5, max_length=1500)  # the question, in words (the view builds it from its form)
+
+
+class SecurityRequest(BaseModel):
+    question: str = Field(min_length=10, max_length=3000)  # the request, in words (the view builds it from its form)
+    token: str = Field(default="", max_length=8000, pattern=r"^[A-Za-z0-9_\-.= ]*$")  # a test JWT, optional
 
 
 class ImageUrlRequest(BaseModel):
@@ -255,6 +261,20 @@ async def drugs(req: DrugsRequest) -> AsyncIterable[ServerSentEvent]:
     its answer."""
     try:
         async for event in run_drugs(req.question.strip()):
+            yield _sse(event)
+    except AgentUnavailable as exc:
+        yield _sse({"type": "error", "message": str(exc)})
+    except Exception as exc:
+        yield _sse({"type": "error", "message": _error_message(exc)})
+    yield _sse({"type": "done"})
+
+
+@app.post("/security", response_class=EventSourceResponse)
+async def security(req: SecurityRequest) -> AsyncIterable[ServerSentEvent]:
+    """Run the Auth Security agent on one request and stream its progress; a final security_report event has
+    its plan."""
+    try:
+        async for event in run_security(req.question.strip(), req.token.strip().removeprefix("Bearer ").strip()):
             yield _sse(event)
     except AgentUnavailable as exc:
         yield _sse({"type": "error", "message": str(exc)})
