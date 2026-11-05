@@ -24,3 +24,7 @@ class Post(Base):
     cover_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Subject the post falls under (e.g. "Science"); shown in the blog's Topics panel.
     category: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # The last passing fact-check: the hash of the title and text it checked, when, and its report
+    fact_check_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fact_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fact_check_report: Mapped[str | None] = mapped_column(Text, nullable=True)

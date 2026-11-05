@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ArrowLeft, EyeOff, FileQuestion, Pencil, Send, Sparkles, Trash2 } from "lucide-react";
-import { api, type Post } from "../api";
+import { ArrowLeft, EyeOff, FileQuestion, Pencil, Send, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { api, ownerKey, type Post } from "../api";
 import { CHAT_URL } from "../components/Layout";
 import { ConfirmDialog, EmptyState, useToast } from "../components/Feedback";
 import { Byline, StatusBadge } from "../components/PostBits";
@@ -87,6 +87,8 @@ export function PostView() {
         <h1 className="article-title">{post.title}</h1>
         <div className="article-meta">
           <Byline post={post} size={40} />
+          {/* Published posts can only be changed by the blog owner */}
+          {(post.status === "draft" || ownerKey()) && (
           <div className="toolbar" role="toolbar" aria-label="Post actions">
             <Link to={`/posts/${id}/edit`} className="btn btn-secondary btn-sm">
               <Pencil size={15} aria-hidden /> Edit
@@ -104,7 +106,15 @@ export function PostView() {
               <Trash2 size={15} aria-hidden />
             </button>
           </div>
+          )}
         </div>
+        {post.status === "draft" && !post.fact_checked && (
+          <p className="fact-check-hint">
+            Publishing needs a passing fact-check of this text. Ask the{" "}
+            <a href={CHAT_URL} target="_blank" rel="noreferrer">AI assistant</a>: “Fact-check post {id} and publish it if it passes.”
+            {post.fact_check_at && " It was edited after its last check."}
+          </p>
+        )}
       </header>
 
       {post.cover_image_url && (
@@ -120,6 +130,19 @@ export function PostView() {
           <p className="muted">This post has no content yet.</p>
         )}
       </div>
+
+      {post.fact_checked && post.fact_check_report && (
+        <details className="fact-check">
+          <summary>
+            <ShieldCheck size={16} aria-hidden /> Fact-checked
+            {post.fact_check_at && ` on ${new Date(post.fact_check_at).toLocaleDateString()}`}: every claim checked is
+            supported by a source
+          </summary>
+          <div className="prose prose-sm">
+            <Markdown remarkPlugins={[remarkGfm]}>{post.fact_check_report}</Markdown>
+          </div>
+        </details>
+      )}
 
       <aside className="ai-callout">
         <Sparkles size={20} aria-hidden />

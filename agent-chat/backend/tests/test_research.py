@@ -66,7 +66,7 @@ async def test_connects_to_local_server_in_process():
     spec = AgentSpec(name="factcheck", title="t", description="d", mcp_url="local:research", prompt="p")
     async with connect(spec) as mcp:
         tools = {t.name for t in (await mcp.list_tools()).tools}
-        assert tools == {"web_search", "fetch_page", "check_links", "submit_report"}
+        assert tools == {"web_search", "fetch_page", "check_links", "submit_report", "read_post"}
         result = await mcp.call_tool("fetch_page", {"url": "http://127.0.0.1:8102/agents"})
         assert result.is_error
 
@@ -139,3 +139,81 @@ def test_quote_matching_ignores_case_punctuation_and_dashes():
     assert not quote_found("70%", PAGE)  # too short to be evidence
     assert quote_found('The paper states, "approximately 70% of the CF alleles" in its intro', PAGE)
     assert not quote_found('The paper states, "70% of all CF patients worldwide"', PAGE)
+
+
+POST = {"id": 7, "title": "CFTR", "status": "draft", "author": "a", "content": "F508del accounts for about 70% of CF alleles."}
+URL = "https://pmc.ncbi.nlm.nih.gov/articles/PMC4029837/"
+SUPPORTED = {"claim": "F508del accounts for about 70% of CF alleles", "verdict": "supported", "source_url": URL,
+             "evidence": "accounts for approximately 70% of the CF alleles"}
+
+
+@pytest.fixture
+def blog(monkeypatch):
+    state = {"post": dict(POST), "recorded": []}
+
+    async def fake_get(post_id):
+        if post_id != 7:
+            raise LookupError(f"Post {post_id} not found")
+        return dict(state["post"])
+
+    async def fake_record(post_id, digest, report):
+        state["recorded"].append((post_id, digest, report))
+        return True, "recorded"
+
+    async def fake_read(url):
+        return {"url": url, "final_url": url, "status": 200}, "Genetic Variation in CF", PAGE
+
+    monkeypatch.setattr(research.post_checks, "get_post", fake_get)
+    monkeypatch.setattr(research.post_checks, "record_check", fake_record)
+    monkeypatch.setattr(research, "_read", fake_read)
+    return state
+
+
+async def report(mcp, claims, overall="ready to publish", **extra):
+    result = await mcp.call_tool("submit_report", {"claims": claims, "overall": overall, "post_id": 7, **extra})
+    assert not result.is_error, result.content
+    return result.structured_content["result"]
+
+
+async def test_a_passing_check_of_a_read_post_is_recorded(blog):
+    spec = AgentSpec(name="factcheck", title="t", description="d", mcp_url="local:research", prompt="p")
+    async with connect(spec) as mcp:
+        unverified = {"claim": "x", "verdict": "unverified", "evidence": "nothing found"}
+        assert "was not read with read_post" in await report(mcp, [unverified])
+        read = await mcp.call_tool("read_post", {"post_id": 7})
+        assert json.loads(read.content[0].text)["content"] == POST["content"]
+        await mcp.call_tool("fetch_page", {"url": URL, "focus": "70%"})
+        text = await report(mcp, [SUPPORTED])
+    assert "Recorded on post 7: it can now be published" in text
+    [(post_id, digest, recorded)] = blog["recorded"]
+    assert post_id == 7 and digest == research.post_checks.content_hash(POST["title"], POST["content"])
+    assert "ready to publish" in recorded
+
+
+async def test_failing_or_thin_checks_and_changed_posts_are_not_recorded(blog):
+    spec = AgentSpec(name="factcheck", title="t", description="d", mcp_url="local:research", prompt="p")
+    async with connect(spec) as mcp:
+        await mcp.call_tool("read_post", {"post_id": 7})
+        await mcp.call_tool("fetch_page", {"url": URL, "focus": "70%"})
+        unverified = {"claim": "x", "verdict": "unverified", "evidence": "nothing found"}
+        assert "not every claim is supported" in await report(mcp, [SUPPORTED, unverified])
+        assert "some claims were not checked" in await report(mcp, [SUPPORTED], skipped=["y: page down"])
+        assert "broken links" in await report(mcp, [SUPPORTED], broken_links=["https://x.example/"])
+
+        blog["post"]["content"] = "word " * 600  # a long post needs more than one checked claim
+        await mcp.call_tool("read_post", {"post_id": 7})
+        assert "needs at least 4 checked claims" in await report(mcp, [SUPPORTED])
+
+        blog["post"] = dict(POST)
+        await mcp.call_tool("read_post", {"post_id": 7})
+        blog["post"]["content"] += " Edited."  # changed during the check
+        assert "changed while it was being checked" in await report(mcp, [SUPPORTED])
+    assert blog["recorded"] == []
+
+
+def test_signatures_match_the_blog_api(monkeypatch):
+    # The same vector is pinned in blog-app/backend/tests/test_publishing.py
+    monkeypatch.setenv("ORIGIN_SECRET", "x" * 40)
+    digest = research.post_checks.content_hash(" T ", "body\n")
+    assert digest == research.post_checks.content_hash("T", "body")
+    assert research.post_checks.attestation_signature(3, digest, 100) == "e15c416bf310abf21ba768a4db46e627540c8af357f68b6df357387d1855a58f"

@@ -31,6 +31,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 from pydantic import BaseModel, Field
 
+from . import post_checks
+
 SEARCH_MODEL = os.getenv("OPENAI_SEARCH_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-2024-11-20"
 MAX_BYTES = 3_000_000
 MAX_REDIRECTS = 5
@@ -403,11 +405,30 @@ def create_server() -> MCPServer:
         instructions=(
             "Tools for checking claims against web sources. web_search finds candidate sources; its summary is "
             "machine-written, so read the source with fetch_page before relying on it. File the verdicts with "
-            "submit_report: a verdict that cites a source must quote a page fetched in this session."
+            "submit_report: a verdict that cites a source must quote a page fetched in this session. To check a blog "
+            "post, read it with read_post and pass its post_id to submit_report."
         ),
     )
     pages: dict[str, str] = {}  # page key -> text, for every page fetched in this session
+    posts: dict[int, dict] = {}  # blog posts read with read_post: id -> the post as read
     refusals: list[dict] = []  # submit_report refuses one report, then downgrades what it can't confirm
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def read_post(post_id: int) -> dict:
+        """Read a blog post (title and Markdown text) to fact-check it. Pass its id to submit_report too: a
+        passing report is then recorded on the post, which lets it be published.
+
+        Args:
+            post_id: The post's id.
+        """
+        try:
+            post = await post_checks.get_post(post_id)
+        except LookupError as exc:
+            raise FetchError(str(exc)) from exc
+        except httpx.HTTPError as exc:
+            raise FetchError(f"Could not read post {post_id}: {exc}") from exc
+        posts[post_id] = post
+        return {k: post.get(k) for k in ("id", "title", "status", "author", "content")}
 
     @mcp.tool(annotations=READ_ONLY)
     async def fetch_page(url: str, focus: str | None = None, max_chars: int = 6000) -> dict:
@@ -504,6 +525,7 @@ def create_server() -> MCPServer:
         overall: Literal["ready to publish", "needs fixes", "needs major revision"],
         broken_links: list[str] | None = None,
         skipped: list[str] | None = None,
+        post_id: int | None = None,
     ) -> str:
         """File the fact-check verdicts and get the formatted report. Call it once every claim is checked.
 
@@ -517,6 +539,7 @@ def create_server() -> MCPServer:
             overall: The overall verdict on the text.
             broken_links: Links in the text that don't work.
             skipped: Claims you did not check, with the reason.
+            post_id: The blog post checked, when it was read with read_post.
         """
         problems: dict[int, str] = {}
         for i, c in enumerate(claims):
@@ -557,7 +580,40 @@ def create_server() -> MCPServer:
         if overall == "ready to publish" and any(c.verdict != "supported" for c in checked):
             overall = "needs fixes"
             notes.append("Not ready to publish: some claims are not supported by a source.")
+        if post_id is not None:
+            notes.append(await record_post_check(post_id, checked, broken_links or [], skipped or [], overall, notes))
         return format_report(checked, broken_links or [], skipped or [], overall, notes)
+
+    async def record_post_check(
+        post_id: int, checked: list[ClaimCheck], broken: list[str], skipped: list[str], overall: str, notes: list[str]
+    ) -> str:
+        """Record a passing check of the post as read, so the blog lets it be published; say why when it isn't."""
+        post = posts.get(post_id)
+        if post is None:
+            return f"Post {post_id} was not read with read_post, so this check can't be recorded on it."
+        problems = []
+        if overall != "ready to publish":
+            problems.append("not every claim is supported by a source")
+        if len(checked) < (needed := post_checks.min_claims(post["content"])):
+            problems.append(f"a post this long needs at least {needed} checked claims, and {len(checked)} were checked")
+        if skipped:
+            problems.append("some claims were not checked")
+        if broken:
+            problems.append("it has broken links")
+        if problems:
+            return f"Post {post_id} can't be published yet: {'; '.join(problems)}."
+        digest = post_checks.content_hash(post["title"], post["content"])
+        try:
+            current = await post_checks.get_post(post_id)
+        except (LookupError, httpx.HTTPError) as exc:
+            return f"Post {post_id} passed, but the check couldn't be recorded: {exc}"
+        if post_checks.content_hash(current["title"], current["content"]) != digest:
+            return f"Post {post_id} changed while it was being checked, so the check wasn't recorded; check it again."
+        report = format_report(checked, broken, skipped, overall, notes)
+        ok, answer = await post_checks.record_check(post_id, digest, report)
+        if not ok:
+            return f"Post {post_id} passed, but the blog didn't record the check ({answer})."
+        return f"Recorded on post {post_id}: it can now be published, until its title or text changes."
 
     return mcp
 

@@ -178,19 +178,20 @@ async def update_post(
 
 @mcp.tool(annotations=ToolAnnotations(idempotentHint=True))
 async def publish_post(post_id: int) -> dict:
-    """Publish a draft post so it appears on the public blog."""
+    """Publish a draft post so it appears on the public blog. The blog only publishes a post whose current
+    title and text passed the Fact-check agent; otherwise it refuses and says why."""
     return _with_url(await _api("POST", f"/posts/{post_id}/publish"))
 
 
 @mcp.tool(annotations=ToolAnnotations(idempotentHint=True))
 async def unpublish_post(post_id: int) -> dict:
-    """Move a published post back to draft."""
+    """Move a published post back to draft (only the blog owner can, so this is usually refused)."""
     return _with_url(await _api("POST", f"/posts/{post_id}/unpublish"))
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=True))
 async def delete_post(post_id: int) -> str:
-    """Permanently delete a post. This cannot be undone."""
+    """Permanently delete a post. This cannot be undone. Published posts can only be deleted by the blog owner."""
     await _api("DELETE", f"/posts/{post_id}")
     return f"Deleted post {post_id}"
 

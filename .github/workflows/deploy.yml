@@ -32,6 +32,12 @@ jobs:
           uv venv -q --python 3.13
           uv pip install -q -r requirements.txt pytest pytest-asyncio
           OPENAI_API_KEY=sk-test .venv/bin/python -m pytest -q
+      - name: Blog API tests (publishing rules)
+        working-directory: blog-app
+        run: |
+          uv venv -q --python 3.13
+          uv pip install -q -r requirements.txt pytest httpx
+          cd backend && ../.venv/bin/python -m pytest -q tests
       - name: Chat UI type check
         working-directory: agent-chat/frontend
         run: npm ci && npx tsc --noEmit -p .

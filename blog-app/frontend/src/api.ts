@@ -13,6 +13,10 @@ export interface Post {
   published_at: string | null;
   cover_image_url?: string | null;
   category?: string | null;
+  // Whether the current title and text passed the Fact-check agent (needed to publish), and its report
+  fact_checked?: boolean;
+  fact_check_at?: string | null;
+  fact_check_report?: string | null;
 }
 
 export interface Category {
@@ -22,9 +26,28 @@ export interface Category {
 
 export type PostInput = Pick<Post, "title" | "content" | "author"> & { category?: string | null };
 
+const OWNER_KEY = "blogOwnerKey";
+
+/** The blog owner's key, kept for this browser tab only; it lets the owner change published posts. */
+export function ownerKey(): string {
+  try {
+    return sessionStorage.getItem(OWNER_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function setOwnerKey(key: string) {
+  try {
+    if (key) sessionStorage.setItem(OWNER_KEY, key);
+    else sessionStorage.removeItem(OWNER_KEY);
+  } catch { /* storage blocked: the key works for no request */ }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const key = ownerKey();
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(key ? { "x-owner-key": key } : {}) },
     ...init,
   });
   if (!res.ok) {

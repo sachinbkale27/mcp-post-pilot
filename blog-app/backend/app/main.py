@@ -1,17 +1,19 @@
 """Blog REST API. The React UI and the MCP server are both clients of this API."""
 
 import os
+import time
 import uuid
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .media import IMAGE_TYPES, MAX_IMAGE_BYTES, canonical_media_urls, get_media_store, local_media_dir, looks_like_image
 from .origin import OriginSecretMiddleware
-from .schemas import CategoryOut, PostCreate, PostOut, PostUpdate
+from .publishing import MAX_CHECK_AGE, content_hash, fact_checked, is_owner, valid_attestation
+from .schemas import CategoryOut, FactCheckRecord, PostCreate, PostOut, PostUpdate
 from .store import Post, PostStore, category_counts, get_store
 
 app = FastAPI(title="Blog API")
@@ -53,7 +55,16 @@ def _clean(fields: dict, store: PostStore) -> dict:
 def _found(post: Post | None, post_id: int) -> Post:
     if post is None:
         raise HTTPException(status_code=404, detail=f"Post {post_id} not found")
-    return post
+    return {**post, "fact_checked": fact_checked(post)}
+
+
+OwnerKey = Annotated[str | None, Header(alias="x-owner-key")]
+OWNER_ONLY = "Published posts can only be changed, unpublished or deleted by the blog owner."
+
+
+def _require_owner_if_published(post: Post, owner: str | None) -> None:
+    if post["status"] == "published" and not is_owner(owner):
+        raise HTTPException(status_code=403, detail=OWNER_ONLY)
 
 
 @app.get("/posts", response_model=list[PostOut])
@@ -63,7 +74,7 @@ def list_posts(
     category: str | None = None,
     store: PostStore = Depends(get_store),
 ):
-    return store.list(status=status, q=q, category=category)
+    return [{**p, "fact_checked": fact_checked(p)} for p in store.list(status=status, q=q, category=category)]
 
 
 @app.get("/categories", response_model=list[CategoryOut])
@@ -77,7 +88,7 @@ def list_categories(
 
 @app.post("/posts", response_model=PostOut, status_code=201)
 def create_post(body: PostCreate, store: PostStore = Depends(get_store)):
-    return store.create(_clean(body.model_dump(), store))
+    return _found(store.create(_clean(body.model_dump(), store)), 0)
 
 
 @app.get("/posts/{post_id}", response_model=PostOut)
@@ -86,23 +97,58 @@ def get_post(post_id: int, store: PostStore = Depends(get_store)):
 
 
 @app.patch("/posts/{post_id}", response_model=PostOut)
-def update_post(post_id: int, body: PostUpdate, store: PostStore = Depends(get_store)):
+def update_post(post_id: int, body: PostUpdate, owner: OwnerKey = None, store: PostStore = Depends(get_store)):
+    _require_owner_if_published(_found(store.get(post_id), post_id), owner)
     return _found(store.update(post_id, _clean(body.model_dump(exclude_unset=True), store)), post_id)
 
 
+@app.post("/posts/{post_id}/fact-check", response_model=PostOut)
+def record_fact_check(post_id: int, body: FactCheckRecord, store: PostStore = Depends(get_store)):
+    """Record a passing fact-check (sent by the Fact-check agent, signed); the post may then be published."""
+    post = _found(store.get(post_id), post_id)
+    if not valid_attestation(post_id, body.content_hash, body.checked_at, body.signature):
+        raise HTTPException(status_code=403, detail="This fact-check record isn't signed by the Fact-check agent.")
+    if abs(time.time() - body.checked_at) > MAX_CHECK_AGE:
+        raise HTTPException(status_code=409, detail="This fact-check is too old to record; check the post again.")
+    if body.content_hash != content_hash(post["title"], post["content"]):
+        raise HTTPException(status_code=409, detail=f"Post {post_id} changed after it was checked; check it again.")
+    fields = {
+        "fact_check_hash": body.content_hash,
+        "fact_check_at": datetime.fromtimestamp(body.checked_at, timezone.utc),
+        "fact_check_report": body.report,
+    }
+    return _found(store.update(post_id, fields), post_id)
+
+
 @app.post("/posts/{post_id}/publish", response_model=PostOut)
-def publish_post(post_id: int, store: PostStore = Depends(get_store)):
+def publish_post(post_id: int, owner: OwnerKey = None, store: PostStore = Depends(get_store)):
+    """Publish a draft. Its current title and text must have passed a fact-check, unless the owner publishes it."""
+    post = _found(store.get(post_id), post_id)
+    if post["status"] == "published":
+        return post
+    if not post["fact_checked"] and not is_owner(owner):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Post {post_id} needs a passing fact-check before it can be published: the Fact-check agent must "
+                "check its current title and text and find every factual claim supported by a source. "
+                + ("It was edited after its last check. " if post.get("fact_check_hash") else "")
+                + "Ask it to fact-check this post, fix what it flags, then publish."
+            ),
+        )
     fields = {"status": "published", "published_at": datetime.now(timezone.utc)}
     return _found(store.update(post_id, fields), post_id)
 
 
 @app.post("/posts/{post_id}/unpublish", response_model=PostOut)
-def unpublish_post(post_id: int, store: PostStore = Depends(get_store)):
+def unpublish_post(post_id: int, owner: OwnerKey = None, store: PostStore = Depends(get_store)):
+    _require_owner_if_published(_found(store.get(post_id), post_id), owner)
     return _found(store.update(post_id, {"status": "draft", "published_at": None}), post_id)
 
 
 @app.delete("/posts/{post_id}", status_code=204)
-def delete_post(post_id: int, store: PostStore = Depends(get_store)):
+def delete_post(post_id: int, owner: OwnerKey = None, store: PostStore = Depends(get_store)):
+    _require_owner_if_published(_found(store.get(post_id), post_id), owner)
     if not store.delete(post_id):
         raise HTTPException(status_code=404, detail=f"Post {post_id} not found")
     return Response(status_code=204)

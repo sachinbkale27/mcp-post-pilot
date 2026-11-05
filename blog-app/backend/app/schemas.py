@@ -33,6 +33,19 @@ class PostOut(BaseModel):
     published_at: datetime | None
     cover_image_url: str | None = None
     category: str | None = None
+    # Whether the current title and text passed the Fact-check agent, and its report
+    fact_checked: bool = False
+    fact_check_at: datetime | None = None
+    fact_check_report: str | None = None
+
+
+class FactCheckRecord(BaseModel):
+    """A passing fact-check of a post's exact title and text, signed by the Fact-check agent."""
+
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    checked_at: int = Field(description="Unix time of the check")
+    report: str = Field(max_length=20000)
+    signature: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class CategoryOut(BaseModel):

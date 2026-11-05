@@ -377,6 +377,29 @@ Resources:
         - Cidrs: !Join ['", "', !Ref AllowedCidrs]
           ChatHost: !Ref ChatDomain
 
+  # Security headers on every response. The CSP fits both UIs: their own scripts only (no inline scripts),
+  # Google Fonts, images from anywhere over HTTPS (posts and annotations link to S3 and other sites), and API
+  # calls to this site only.
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub ${AWS::StackName}-security-headers
+        SecurityHeadersConfig:
+          StrictTransportSecurity: { AccessControlMaxAgeSec: 31536000, IncludeSubdomains: false, Preload: false, Override: true }
+          ContentTypeOptions: { Override: true }
+          FrameOptions: { FrameOption: DENY, Override: true }
+          ReferrerPolicy: { ReferrerPolicy: strict-origin-when-cross-origin, Override: true }
+          ContentSecurityPolicy:
+            Override: true
+            ContentSecurityPolicy: >-
+              default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+              font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self';
+              frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
+        CustomHeadersConfig:
+          Items:
+            - { Header: Permissions-Policy, Value: "camera=(), microphone=(), geolocation=(), payment=()", Override: true }
+
   Distribution:
     Condition: HasImage
     Type: AWS::CloudFront::Distribution
@@ -411,6 +434,7 @@ Resources:
           ViewerProtocolPolicy: redirect-to-https
           Compress: true
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6          # Managed-CachingOptimized
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
           FunctionAssociations:
             - { EventType: viewer-request, FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN }
         CacheBehaviors:
@@ -419,6 +443,7 @@ Resources:
             ViewerProtocolPolicy: redirect-to-https
             AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
             CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad        # Managed-CachingDisabled
+            ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
             OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader
             FunctionAssociations:
               - { EventType: viewer-request, FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN }
@@ -428,6 +453,7 @@ Resources:
             AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
             Compress: false               # don't buffer the SSE stream
             CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
             OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
             FunctionAssociations:
               - { EventType: viewer-request, FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN }

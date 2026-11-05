@@ -6,6 +6,7 @@ import { ToastProvider } from "./components/Feedback";
 import { PostList } from "./pages/PostList";
 import { PostView } from "./pages/PostView";
 import { PostEditor } from "./pages/PostEditor";
+import { Owner } from "./pages/Owner";
 import "./styles.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -18,6 +19,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/new" element={<PostEditor />} />
             <Route path="/posts/:id" element={<PostView />} />
             <Route path="/posts/:id/edit" element={<PostEditor key="edit" />} />
+            <Route path="/owner" element={<Owner />} />
           </Routes>
         </Layout>
       </ToastProvider>

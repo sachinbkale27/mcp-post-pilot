@@ -48,6 +48,9 @@ class SqlPostStore:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE posts ADD COLUMN IF NOT EXISTS cover_image_url VARCHAR(500)"))
             conn.execute(text("ALTER TABLE posts ADD COLUMN IF NOT EXISTS category VARCHAR(60)"))
+            conn.execute(text("ALTER TABLE posts ADD COLUMN IF NOT EXISTS fact_check_hash VARCHAR(64)"))
+            conn.execute(text("ALTER TABLE posts ADD COLUMN IF NOT EXISTS fact_check_at TIMESTAMPTZ"))
+            conn.execute(text("ALTER TABLE posts ADD COLUMN IF NOT EXISTS fact_check_report TEXT"))
         self._sessions = SessionLocal
 
     @staticmethod
