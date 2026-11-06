@@ -46,10 +46,14 @@ def test_wrong_credentials_get_no_session(configured):
     (SEVERAL, {"viewer": False, "sachin": True}),  # marked admin
     ({"users": [{"username": "viewer", "password": "pw1"}, {"username": "sachin", "password": "pw2"}]},
      {"viewer": True, "sachin": False}),  # none marked: the first one is
+    ([{"username": "viewer", "password": "pw1"}, {"username": "sachin", "password": "pw2", "admin": True}],
+     {"viewer": False, "sachin": True}),  # the users list without the {"users": ...} wrapper
+    ([{"username": "viewer", "password": "pw1"}, {"username": "sachin", "password": "pw2"}],
+     {"viewer": True, "sachin": False}),
 ])
 def test_several_users_follow_image_labels_admin_rule(monkeypatch, configured, config, admins):
     monkeypatch.setenv("ADMIN_USERS", json.dumps(config))
-    for user in config["users"]:
+    for user in config["users"] if isinstance(config, dict) else config:
         assert admin.login(user["username"], user["password"])["admin"] is admins[user["username"]]
 
 
@@ -58,6 +62,7 @@ def test_several_users_follow_image_labels_admin_rule(monkeypatch, configured, c
     {"SESSION_SECRET": "too-short", "ADMIN_USERS": json.dumps(ONE_USER)},
     {"SESSION_SECRET": KEY, "ADMIN_USERS": ""},
     {"SESSION_SECRET": KEY, "ADMIN_USERS": "{not json"},
+    {"SESSION_SECRET": KEY, "ADMIN_USERS": '"just a string"'},
 ])
 def test_sign_in_is_off_until_configured(monkeypatch, env):
     for name, value in env.items():

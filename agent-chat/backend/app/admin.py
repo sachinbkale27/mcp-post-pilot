@@ -4,6 +4,7 @@ ADMIN_USERS holds the accounts, in Image Label's admin-secret format:
     {"username": "sachin", "password": "..."}                              one user, an admin
     {"users": [{"username": "a", "password": "...", "admin": true}, ...]}  several; those marked admin are
                                                                            (none marked: the first one is)
+    [{"username": "a", "password": "..."}, ...]                            the same list, without "users"
 SESSION_SECRET signs the session tokens (at least 32 characters, e.g. `openssl rand -hex 32`).
 On AWS both are SecureString parameters under /mcp-post-pilot (see settings.py); locally, agent-chat/.env.
 Without them, sign-in is off and the admin pages can't be used.
@@ -40,6 +41,8 @@ def _users() -> list[dict]:
         config = json.loads(os.getenv("ADMIN_USERS", "") or "null")
     except json.JSONDecodeError as exc:
         raise AdminUnavailable("Admin sign-in is off: ADMIN_USERS is not valid JSON.") from exc
+    if isinstance(config, list):  # the users list on its own: [{"username": ..., "password": ...}, ...]
+        config = {"users": config}
     if isinstance(config, dict) and isinstance(config.get("users"), list):
         users = [u for u in config["users"] if isinstance(u, dict)]
         any_marked = any(u.get("admin") is True for u in users)

@@ -244,7 +244,8 @@ the site).
 - **Where:** the `AnalyticsTable` DynamoDB table (one partition per UTC day), removed by TTL after about 13 months.
   The browser posts to `/api/agent/events` on the same site, so the CSP (`connect-src 'self'`) is unchanged.
 - **Access:** the same model as Image Label's admin page. `POST /admin/login` checks `ADMIN_USERS` (Image Label's
-  admin-secret JSON: `{"username", "password"}`, or `{"users": [...]}` with `"admin": true` on admins) and returns
+  admin-secret JSON: `{"username", "password"}`, or `{"users": [...]}` (or just the list) with `"admin": true` on
+  admins; none marked, the first account is the admin) and returns
   a token signed with `SESSION_SECRET` that expires after 12 hours. `GET /admin/usage` answers 401 without a valid
   session and 403 for a non-admin. Without both settings, sign-in is off.
 
