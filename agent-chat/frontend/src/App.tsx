@@ -5,6 +5,8 @@ import { Composer, MAX_ATTACHMENTS, type Attachment } from "./components/Compose
 import { prepareImage } from "./lib/images";
 import { AgentTurn, UserMessage, type Turn } from "./components/Messages";
 import { applyEvent } from "./lib/events";
+import { track, trackView } from "./lib/analytics";
+import { AdminView } from "./components/AdminView";
 import { LabelView } from "./components/LabelView";
 import { MedicinesView } from "./components/MedicinesView";
 import { SecurityView } from "./components/SecurityView";
@@ -64,11 +66,11 @@ const TRIAL_EXAMPLES = [
   },
 ];
 
-const HASHES: Record<string, View> = { "#annotate": "label", "#label": "label", "#trials": "trials", "#medicines": "medicines", "#security": "security" };
+const HASHES: Record<string, View> = { "#annotate": "label", "#label": "label", "#trials": "trials", "#medicines": "medicines", "#security": "security", "#admin": "admin" };
 
 /** #annotate (or the earlier #label) opens the annotation view, #trials the clinical trials search, #medicines the drug
- * information, #security the Auth Security agent. */
-const VIEW_TITLES: Partial<Record<View, string>> = { label: "Annotate Images", trials: "Clinical Trials", medicines: "Medicines", security: "App Security" };
+ * information, #security the Auth Security agent, #admin the usage analytics (signed-in admin only). */
+const VIEW_TITLES: Partial<Record<View, string>> = { label: "Annotate Images", trials: "Clinical Trials", medicines: "Medicines", security: "App Security", admin: "Usage" };
 
 function viewFromHash(): View {
   return HASHES[location.hash] ?? "chat";
@@ -107,9 +109,14 @@ export function App() {
   function openView(next: View) {
     setView(next);
     setSidebarOpen(false);
-    const hash = next === "chat" ? "" : next === "label" ? "#annotate" : `#${next}`;
+    const hash = next === "chat" ? "" : next === "label" ? "#annotate" : `#${next}`; // admin keeps its #admin
     history.replaceState(null, "", hash || location.pathname + location.search);
   }
+
+  // Usage analytics: one view per view change (the owner's admin page is not counted)
+  useEffect(() => {
+    if (view !== "admin") trackView(view);
+  }, [view]);
 
   const loadInfo = () => {
     setInfoError(undefined);
@@ -143,6 +150,7 @@ export function App() {
         .then(async ({ blob, dataUrl }) => {
           patchAttachment(id, { preview: dataUrl, status: "uploading" });
           patchAttachment(id, { url: await uploadImage(blob), status: "ready" });
+          track("upload", { where: "chat" });
         })
         .catch((e) => patchAttachment(id, { status: "error", error: (e as Error).message }));
     }
@@ -240,6 +248,10 @@ export function App() {
                 : undefined
             }
           />
+        </div>
+
+        <div className="scroll" hidden={view !== "admin"}>
+          <AdminView active={view === "admin"} />
         </div>
 
         <div className="scroll" hidden={view !== "trials"}>

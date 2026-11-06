@@ -100,6 +100,9 @@ jobs:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           # The Image Annotation Agent uses Claude when this is set (it places boxes far better)
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Sign-in for the usage analytics page (#admin), as Image Label's admin secret; both optional
+          ADMIN_USERS: ${{ secrets.ADMIN_USERS }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-2024-11-20' }}
           OPENAI_IMAGE_MODEL: ${{ vars.OPENAI_IMAGE_MODEL || 'gpt-image-2.5-flare' }}
           LANGSMITH_TRACING: ${{ vars.LANGSMITH_TRACING || 'true' }}
@@ -118,6 +121,8 @@ jobs:
           put OPENAI_API_KEY SecureString
           put LANGSMITH_API_KEY SecureString
           put ANTHROPIC_API_KEY SecureString
+          put ADMIN_USERS SecureString
+          put SESSION_SECRET SecureString
           put OPENAI_MODEL String
           put OPENAI_IMAGE_MODEL String
           put LANGSMITH_TRACING String

@@ -1,16 +1,19 @@
 """Chat API for the multi-agent supervisor. Streams agent events to the UI as Server-Sent Events (SSE)."""
 
 import os
+import re
+import time
 import uuid
 from collections.abc import AsyncIterable
 from typing import Literal
 
 import openai
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, Header, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel, Field, field_validator
 
+from . import admin, analytics
 from .agent import list_agents, reset_thread, run_turn
 from .diagnose import run_diagnosis
 from .image_url import ImageUrlError, download_image
@@ -116,7 +119,9 @@ async def fetch_image(req: ImageUrlRequest) -> Response:
     try:
         data, media_type, name = await download_image(req.url.strip())
     except ImageUrlError as exc:
+        analytics.record("fetch_image", {"ok": False, "status": exc.status})
         raise HTTPException(status_code=exc.status, detail=str(exc))
+    analytics.record("fetch_image", {"ok": True})
     return Response(data, media_type=media_type, headers={"x-image-name": name, "cache-control": "no-store"})
 
 
@@ -144,7 +149,8 @@ async def chat(req: ChatRequest) -> AsyncIterable[ServerSentEvent]:
     yield _sse({"type": "conversation", "id": conversation_id})
     try:
         images = [img.model_dump() for img in req.images]
-        async for event in run_turn(conversation_id, req.message, images):
+        turn = run_turn(conversation_id, req.message, images)
+        async for event in analytics.tracked("chat_turn", turn, images=len(images), followup=req.conversation_id is not None):
             yield _sse(event)
     except Exception as exc:
         yield _sse({"type": "error", "message": _error_message(exc)})
@@ -170,7 +176,8 @@ class DiagnoseRequest(BaseModel):
 async def diagnose(req: DiagnoseRequest) -> AsyncIterable[ServerSentEvent]:
     """Stream an AI interpretation of one image (research and education, not a diagnosis)."""
     try:
-        async for event in run_diagnosis(req.image.model_dump(), req.context, req.history, req.other_info):
+        run = run_diagnosis(req.image.model_dump(), req.context, req.history, req.other_info)
+        async for event in analytics.tracked("diagnose", run, history=bool(req.history.strip())):
             yield _sse(event)
     except Exception as exc:
         yield _sse({"type": "error", "message": _error_message(exc)})
@@ -181,9 +188,12 @@ async def diagnose(req: DiagnoseRequest) -> AsyncIterable[ServerSentEvent]:
 async def label_share(req: ShareRequest):
     """A link that opens the image and its annotations in Image Label, where anyone can edit them further."""
     try:
-        return {"url": await share_link(req.image_id)}
+        url = await share_link(req.image_id)
     except LabelingUnavailable as exc:
+        analytics.record("share", {"ok": False})
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    analytics.record("share", {"ok": True})
+    return {"url": url}
 
 
 @app.post("/label/warmup")
@@ -197,7 +207,7 @@ async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
     """Upload one image to Image Label, have the Image Annotation Agent annotate it, and stream the progress and
     a final label_result event (saved annotations and COCO / YOLO exports)."""
     try:
-        async for event in run_labeling(
+        run = run_labeling(
             req.image.model_dump(),
             req.instructions,
             req.labels,
@@ -207,7 +217,9 @@ async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
             req.image_id,
             req.history,
             req.other_info,
-        ):
+        )
+        props = {"model": req.model, "labels": len(req.labels), "instructions": bool(req.instructions.strip())}
+        async for event in analytics.tracked("label", run, **props):
             yield _sse(event)
     except LabelingUnavailable as exc:
         yield _sse({"type": "error", "message": str(exc)})
@@ -220,11 +232,15 @@ async def label(req: LabelRequest) -> AsyncIterable[ServerSentEvent]:
 async def handoff(results: ResultsHandoff):
     """Ask AI: hand an image analysis to the genetics assistant; returns the address of a chat about it."""
     try:
-        return {"url": await hand_off(results)}
+        url = await hand_off(results)
     except HandoffError as exc:
+        analytics.record("handoff", {"ok": False})
         raise HTTPException(status_code=502, detail=str(exc))
     except Exception as exc:
+        analytics.record("handoff", {"ok": False})
         raise HTTPException(status_code=502, detail=f"Could not reach the genetics assistant ({type(exc).__name__})")
+    analytics.record("handoff", {"ok": True, "findings": len(results.findings)})
+    return {"url": url}
 
 
 @app.post("/label/pathology", response_class=EventSourceResponse)
@@ -232,7 +248,8 @@ async def label_pathology(req: PathologyRequest) -> AsyncIterable[ServerSentEven
     """Run one histopathology tool (nuclei outlines, quality check or stain normalization) on an image and
     stream the tool calls and the result."""
     try:
-        async for event in run_pathology(req.image.model_dump(), req.action, req.image_id, req.category.strip() or "agent-chat"):
+        run = run_pathology(req.image.model_dump(), req.action, req.image_id, req.category.strip() or "agent-chat")
+        async for event in analytics.tracked("pathology", run, action=req.action):
             yield _sse(event)
     except LabelingUnavailable as exc:
         yield _sse({"type": "error", "message": str(exc)})
@@ -246,7 +263,8 @@ async def trials(req: TrialsRequest) -> AsyncIterable[ServerSentEvent]:
     """Run the Clinical Trials agent on one search and stream its progress; the trial cards are in the
     submit_trials result, and a final trials_report event has the agent's report."""
     try:
-        async for event in run_trials(req.question.strip(), req.person.strip()):
+        run = run_trials(req.question.strip(), req.person.strip())
+        async for event in analytics.tracked("trials", run, profile=bool(req.person.strip())):
             yield _sse(event)
     except TrialsUnavailable as exc:
         yield _sse({"type": "error", "message": str(exc)})
@@ -260,7 +278,7 @@ async def drugs(req: DrugsRequest) -> AsyncIterable[ServerSentEvent]:
     """Run the Drug Information agent on one question and stream its progress; a final drug_report event has
     its answer."""
     try:
-        async for event in run_drugs(req.question.strip()):
+        async for event in analytics.tracked("drugs", run_drugs(req.question.strip())):
             yield _sse(event)
     except AgentUnavailable as exc:
         yield _sse({"type": "error", "message": str(exc)})
@@ -274,13 +292,101 @@ async def security(req: SecurityRequest) -> AsyncIterable[ServerSentEvent]:
     """Run the Auth Security agent on one request and stream its progress; a final security_report event has
     its plan."""
     try:
-        async for event in run_security(req.question.strip(), req.token.strip().removeprefix("Bearer ").strip()):
+        run = run_security(req.question.strip(), req.token.strip().removeprefix("Bearer ").strip())
+        async for event in analytics.tracked("security", run, token=bool(req.token.strip())):
             yield _sse(event)
     except AgentUnavailable as exc:
         yield _sse({"type": "error", "message": str(exc)})
     except Exception as exc:
         yield _sse({"type": "error", "message": _error_message(exc)})
     yield _sse({"type": "done"})
+
+
+PROP_KEY = re.compile(r"^[a-z_]{1,24}$")
+PROP_VALUE = re.compile(r"^[\w .:/+#-]{0,60}$")
+
+
+class ClientEvent(BaseModel):
+    """One event from the browser (views and actions only it sees). Small and strict: anyone can send these."""
+
+    name: Literal["view", "upload", "download"]
+    props: dict[str, str | int | bool] = Field(default_factory=dict, max_length=6)
+    session: str = Field(default="", pattern=r"^[0-9a-f]{0,32}$")  # per browser tab, from sessionStorage
+    referrer: str = Field(default="", max_length=500)  # the first view's document.referrer; only its host is kept
+    utm_source: str = Field(default="", max_length=60, pattern=r"^[\w .-]*$")
+
+    @field_validator("props")
+    @classmethod
+    def _small_props(cls, value: dict) -> dict:
+        for key, item in value.items():
+            if not PROP_KEY.match(key):
+                raise ValueError(f"bad property name {key!r}")
+            if isinstance(item, str) and not PROP_VALUE.match(item):
+                raise ValueError(f"bad value for {key!r}")
+            if isinstance(item, int) and not isinstance(item, bool) and not 0 <= item <= 1_000_000:
+                raise ValueError(f"{key!r} is out of range")
+        return value
+
+
+@app.post("/events", status_code=204)
+def track_event(event: ClientEvent) -> Response:
+    """Record a view or an action from the browser (best effort: never an error the visitor would notice)."""
+    props = dict(event.props)
+    if host := analytics.referrer_host(event.referrer):
+        props["referrer"] = host
+    if event.utm_source:
+        props["utm_source"] = event.utm_source.lower()
+    analytics.record(event.name, props, source="client", session=event.session)
+    return Response(status_code=204)
+
+
+class AdminLogin(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=200)
+
+
+@app.post("/admin/login")
+def admin_login(req: AdminLogin, response: Response):
+    """Sign in to the admin pages (as Image Label's /admin/login); returns a signed session token."""
+    response.headers["cache-control"] = "no-store"
+    try:
+        session = admin.login(req.username, req.password)
+    except admin.AdminUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    if session is None:
+        time.sleep(1)  # slows password guessing
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    return session
+
+
+def _admin_session(authorization: str, x_admin_session: str) -> dict:
+    """The signed-in admin, or a 401 (no or bad session) / 403 (not an admin), as Image Label's admin routes.
+    The browser sends the token in X-Admin-Session, a custom header CloudFront always forwards to the
+    Lambda; Authorization: Bearer works too (curl, local)."""
+    token = x_admin_session or authorization.removeprefix("Bearer ").strip()
+    try:
+        session = admin.get_session(token) if token else None
+    except admin.AdminUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    if session is None:
+        raise HTTPException(status_code=401, detail="Sign in to see this page")
+    if not session["admin"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return session
+
+
+@app.get("/admin/usage")
+def admin_usage(
+    response: Response,
+    days: int = Query(7, ge=1, le=analytics.MAX_STATS_DAYS),
+    internal: bool = False,  # include the owner's own browsers (?internal=1 on the site)
+    authorization: str = Header(default=""),
+    x_admin_session: str = Header(default=""),
+):
+    """The site's usage analytics for the admin page (#admin): the only way to read them."""
+    _admin_session(authorization, x_admin_session)
+    response.headers["cache-control"] = "no-store"
+    return analytics.stats(days, internal)
 
 
 @app.delete("/chat/{conversation_id}")

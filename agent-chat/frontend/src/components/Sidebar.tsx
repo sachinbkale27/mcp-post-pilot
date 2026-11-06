@@ -2,7 +2,7 @@ import { BookText, Bot, FileCode2, FlaskConical, MessageSquarePlus, MessagesSqua
 import { BLOG_URL, type AgentInfo, type AgentsInfo } from "../api";
 import { toolMeta } from "../lib/tools";
 
-export type View = "chat" | "label" | "trials" | "medicines" | "security";
+export type View = "chat" | "label" | "trials" | "medicines" | "security" | "admin"; // admin: #admin only, not in the panel
 
 interface Props {
   info?: AgentsInfo;

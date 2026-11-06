@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8102";
+export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8102";
 export const BLOG_URL = import.meta.env.VITE_BLOG_URL ?? "http://localhost:5173";
 // The blog API stores uploaded images (same CloudFront distribution in production).
 const BLOG_API_URL = import.meta.env.VITE_BLOG_API_URL ?? "http://localhost:8100";

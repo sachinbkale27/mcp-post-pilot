@@ -103,6 +103,21 @@ Resources:
       TimeToLiveSpecification: { AttributeName: expires_at, Enabled: true }
       SSESpecification: { SSEEnabled: true }
 
+  # Usage analytics (agent-chat/backend/app/analytics.py): one partition per UTC day, events sorted by time;
+  # TTL removes them after ANALYTICS_RETENTION_DAYS (about 13 months). Read only through the admin page.
+  AnalyticsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: day, AttributeType: S }
+        - { AttributeName: sk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: day, KeyType: HASH }
+        - { AttributeName: sk, KeyType: RANGE }
+      TimeToLiveSpecification: { AttributeName: expires_at, Enabled: true }
+      SSESpecification: { SSEEnabled: true }
+
   # ---------------------------------------------------------- functions
   BlogRole:
     Type: AWS::IAM::Role
@@ -161,6 +176,9 @@ Resources:
               - Effect: Allow
                 Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:DeleteItem]
                 Resource: !GetAtt ConversationsTable.Arn
+              - Effect: Allow   # record events; the admin page reads one day at a time
+                Action: [dynamodb:PutItem, dynamodb:Query]
+                Resource: !GetAtt AnalyticsTable.Arn
               - Effect: Allow
                 Action: ssm:GetParametersByPath
                 Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/mcp-post-pilot
@@ -237,6 +255,8 @@ Resources:
         Variables:
           CONVERSATION_BACKEND: dynamodb
           CONVERSATIONS_TABLE: !Ref ConversationsTable
+          ANALYTICS_BACKEND: dynamodb
+          ANALYTICS_TABLE: !Ref AnalyticsTable
           SSM_PARAMETER_PATH: /mcp-post-pilot
           MCP_SERVER_URL: !Sub "${McpFunctionUrl.FunctionUrl}mcp"
           ORIGIN_SECRET: !Ref OriginSecret

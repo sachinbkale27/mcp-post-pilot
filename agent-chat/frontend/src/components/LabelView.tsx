@@ -7,6 +7,7 @@ import {
   type AgentEvent, type Annotation, type DiagnosisRegion, type LabelResult, type NucleiSummary, type PathologyAction, type QualityResult,
 } from "../api";
 import { applyEvent } from "../lib/events";
+import { track, trackDownload } from "../lib/analytics";
 import { ACCEPTED_TYPES, prepareImage, withGrid } from "../lib/images";
 import { AgentCard, type Step } from "./Messages";
 import { AnnotateFaq } from "./AnnotateFaq";
@@ -122,6 +123,7 @@ export function LabelView({ active, available, unavailableReason, busy, onBusyCh
         setUpload({ name: file.name, preview: dataUrl, status: "uploading" });
         const url = await uploadImage(blob);
         setUpload({ name: file.name, preview: dataUrl, url, status: "ready" });
+        track("upload", { where: "annotate" });
       })
       .catch((e) => setUpload({ name: file.name, status: "error", error: (e as Error).message }));
   }
@@ -802,6 +804,7 @@ function LabelResultView({ result, image, name, onAskAI }: { result: LabelResult
 }
 
 function downloadDataUrl(dataUrl: string, filename: string) {
+  trackDownload(filename);
   Object.assign(document.createElement("a"), { href: dataUrl, download: filename }).click();
 }
 
@@ -874,6 +877,7 @@ async function renderFigure(minWidth: number, type: "image/png" | "image/webp"):
 }
 
 function download(filename: string, content: string, type: string) {
+  trackDownload(filename);
   const url = URL.createObjectURL(new Blob([content], { type }));
   const link = Object.assign(document.createElement("a"), { href: url, download: filename });
   link.click();

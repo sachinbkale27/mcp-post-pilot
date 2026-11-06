@@ -113,6 +113,7 @@ browser ──HTTPS──► CloudFront ── edge function: IP allow-list, /ap
    ```
 2. Repository secrets (`gh secret set NAME` prompts for the value): `AWS_ACCESS_KEY_ID`,
    `AWS_SECRET_ACCESS_KEY` (the `github-actions-deployer` IAM user), `OPENAI_API_KEY`, optionally `LANGSMITH_API_KEY`.
+   Optionally `ADMIN_USERS` and `SESSION_SECRET` for the [usage analytics](#usage-analytics) page.
 3. Optional repository variables: `OPENAI_MODEL`, `LANGSMITH_PROJECT`, `LANGSMITH_TRACING`, `LANGSMITH_ENDPOINT`.
 4. Push to `main` (or `gh workflow run deploy.yml`). The job summary shows the URLs.
 
@@ -226,6 +227,34 @@ work is left to Segment Anything and the model chooses. A run takes 2 to 3 minut
 tissue it says it found none. **Ask AI** hands the findings (labels, notes, extent, measurements, the
 annotated figure) to the genetics assistant, which writes the suggested questions from them.
 Both are for research and education, not diagnosis.
+
+## Usage analytics
+
+First-party and private: the agent chat records what people view and which agents, tools and features
+they use, and only a signed-in admin can see it, at **`agent.sachin-kale.com/#admin`** (not linked from
+the site).
+
+- **What is recorded:** views of each section, image uploads, downloads (COCO, YOLO, QuPath, figure), and
+  one event per agent run (chat turn, annotate, pathology, diagnose, trials, medicines, security, Ask AI
+  handoff, open in Image Label) with the agents and tools it used, whether it failed, and how long it took.
+  Plus the visitor's country and region (from CloudFront), device class and browser, and the referring site's host.
+- **What is not recorded:** IP addresses, messages, images, reports or anything typed. No cookies are set; the
+  visitor id (from `viewer.py`) is a keyed hash that changes daily. Bots, browsers sending Do Not Track or Global
+  Privacy Control, and your own browsers (`?internal=1`, shown with *Include my visits*) are left out.
+- **Where:** the `AnalyticsTable` DynamoDB table (one partition per UTC day), removed by TTL after about 13 months.
+  The browser posts to `/api/agent/events` on the same site, so the CSP (`connect-src 'self'`) is unchanged.
+- **Access:** the same model as Image Label's admin page. `POST /admin/login` checks `ADMIN_USERS` (Image Label's
+  admin-secret JSON: `{"username", "password"}`, or `{"users": [...]}` with `"admin": true` on admins) and returns
+  a token signed with `SESSION_SECRET` that expires after 12 hours. `GET /admin/usage` answers 401 without a valid
+  session and 403 for a non-admin. Without both settings, sign-in is off.
+
+```bash
+gh secret set SESSION_SECRET --body "$(openssl rand -hex 32)"
+gh secret set ADMIN_USERS     # paste: {"username": "sachin", "password": "<a long password>"}
+```
+
+The deploy workflow stores both as SecureString parameters under `/mcp-post-pilot`. Locally, put them in
+`agent-chat/.env` (see `.env.example`); events then live in memory.
 
 ## How it works
 
